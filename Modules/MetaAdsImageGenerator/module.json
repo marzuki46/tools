@@ -1,0 +1,11 @@
+{
+    "name": "MetaAdsImageGenerator",
+    "alias": "metaadsimagegenerator",
+    "description": "",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\MetaAdsImageGenerator\\Providers\\MetaAdsImageGeneratorServiceProvider"
+    ],
+    "files": []
+}
