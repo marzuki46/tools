@@ -15,7 +15,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/api-keys', [ApiKeyController::class, 'index']);
 
     // Website management
-    Route::apiResource('websites', WebsiteApiController::class);
+    Route::apiResource('websites', WebsiteApiController::class)->names('api.websites');
     Route::post('/websites/{website}/attach-tool', [WebsiteApiController::class, 'attachTool']);
     Route::post('/websites/{website}/detach-tool', [WebsiteApiController::class, 'detachTool']);
     Route::post('/websites/{website}/generate-key', [WebsiteApiController::class, 'generateKey']);
