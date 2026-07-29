@@ -112,6 +112,12 @@ class BusinessProfileController extends Controller
             'products_services' => $p->products_services,
             'target_audience' => $p->target_audience,
             'usp' => $p->usp,
+            'business_hours' => $p->business_hours,
+            'contact_email' => $p->contact_email,
+            'contact_phone' => $p->contact_phone,
+            'address' => $p->address,
+            'social_media' => $p->social_media,
+            'is_default' => $p->is_default,
         ]);
 
         return response()->json(['data' => $profiles]);
