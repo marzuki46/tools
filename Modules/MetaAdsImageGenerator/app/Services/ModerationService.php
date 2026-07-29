@@ -2,19 +2,52 @@
 
 namespace Modules\MetaAdsImageGenerator\Services;
 
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+
 class ModerationService
 {
     public function checkContent(string $text): bool
     {
-        // Placeholder for moderation logic (e.g., checking against a blocklist or calling an API)
-        $blockedWords = ['nsfw', 'illegal', 'violence'];
+        $blockedWords = ['nsfw', 'illegal', 'violence', 'gore', 'explicit', 'hate speech', 'terrorism'];
 
         foreach ($blockedWords as $word) {
             if (stripos($text, $word) !== false) {
-                return false; // Failed moderation
+                Log::warning('Moderation: blocked word triggered', ['word' => $word]);
+                return false;
             }
         }
 
-        return true; // Passed moderation
+        $apiKey = config('meta-ads-image-generator.providers.openai.api_key')
+            ?? config('meta-ads-generator.providers.openai.api_key');
+
+        if (!$apiKey) {
+            return true;
+        }
+
+        try {
+            $response = Http::withToken($apiKey)
+                ->timeout(10)
+                ->post('https://api.openai.com/v1/moderations', [
+                    'input' => $text,
+                ]);
+
+            if ($response->successful()) {
+                $result = $response->json();
+                $flagged = $result['results'][0]['flagged'] ?? false;
+                if ($flagged) {
+                    Log::warning('Moderation: OpenAI flagged content', [
+                        'categories' => $result['results'][0]['categories'] ?? [],
+                    ]);
+                }
+                return !$flagged;
+            }
+
+            Log::warning('Moderation API call failed', ['status' => $response->status()]);
+            return true;
+        } catch (\Exception $e) {
+            Log::warning('Moderation API exception', ['error' => $e->getMessage()]);
+            return true;
+        }
     }
 }

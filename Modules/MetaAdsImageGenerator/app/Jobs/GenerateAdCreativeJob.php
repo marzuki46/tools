@@ -32,7 +32,8 @@ class GenerateAdCreativeJob implements ShouldQueue
             // 1. Generate Base Image via AI
             $aiResult = $aiManager->generateImage(
                 $this->generation->compiled_prompt,
-                $this->generation->ai_provider
+                $this->generation->ai_provider,
+                $this->generation->ai_model
             );
 
             $baseImageUrl = $aiResult['url'];

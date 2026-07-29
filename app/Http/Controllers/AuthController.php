@@ -21,6 +21,14 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
+        // Check if user is suspended
+        $user = User::where('email', $credentials['email'])->first();
+        if ($user && $user->suspended_at) {
+            return back()->withErrors([
+                'email' => 'This account has been suspended. Contact an administrator.',
+            ])->onlyInput('email');
+        }
+
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $request->session()->regenerate();
             return redirect()->intended(route('dashboard'));
@@ -40,7 +48,7 @@ class AuthController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'email' => 'required|email|max:255|unique:users',
             'password' => 'required|string|min:8|confirmed',
         ]);
 
@@ -53,7 +61,7 @@ class AuthController extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        return redirect()->route('dashboard')->with('success', 'Account created successfully!');
+        return redirect()->route('dashboard');
     }
 
     public function logout(Request $request)
@@ -62,6 +70,6 @@ class AuthController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login')->with('success', 'You have been logged out.');
+        return redirect('/');
     }
 }

@@ -13,6 +13,7 @@ class AdGeneration extends Model
         'user_id',
         'preset_id',
         'asset_id',
+        'model_asset_id',
         'input_form',
         'compiled_prompt',
         'ai_provider',
@@ -49,6 +50,11 @@ class AdGeneration extends Model
     public function asset(): BelongsTo
     {
         return $this->belongsTo(AdAsset::class, 'asset_id');
+    }
+
+    public function modelAsset(): BelongsTo
+    {
+        return $this->belongsTo(AdAsset::class, 'model_asset_id');
     }
 
     public function exports(): HasMany

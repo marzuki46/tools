@@ -2,6 +2,7 @@
 
 namespace Modules\MetaAdsImageGenerator\Http\Controllers\Api;
 
+use App\Models\Setting;
 use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -39,7 +40,7 @@ class GenerateController extends Controller
             return response()->json(['error' => 'Content flagged by moderation'], 400);
         }
 
-        $provider = $request->input('ai_provider', config('meta-ads-image-generator.default_provider'));
+        $provider = $request->input('ai_provider', Setting::defaultProvider());
 
         $generation = AdGeneration::create([
             'project_id' => $project->id,

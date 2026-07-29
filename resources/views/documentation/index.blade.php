@@ -1,0 +1,568 @@
+@extends('layouts.app')
+
+@section('title', 'Dokumentasi API')
+
+@section('content')
+<div class="space-y-6">
+    <div>
+        <h1 class="text-2xl font-bold">Dokumentasi API</h1>
+        <p class="text-gray-500 text-sm mt-1">Panduan lengkap penggunaan semua modul dan API</p>
+    </div>
+
+    {{-- Tabel Naming Convention --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">0. Naming Convention & Otomasi</h2>
+        <p class="text-sm text-gray-600 mb-3">Semua endpoint API eksternal menggunakan prefix <code class="bg-gray-100 px-1 rounded">/api/v1/</code> dengan format:</p>
+        <table class="w-full text-sm mb-4">
+            <thead>
+                <tr class="border-b border-gray-200">
+                    <th class="text-left py-2 font-medium text-gray-600">Tool / Modul</th>
+                    <th class="text-left py-2 font-medium text-gray-600">Slug (untuk API / tool/{slug})</th>
+                    <th class="text-left py-2 font-medium text-gray-600">Endpoint Otomasi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium">Keyword Research</td>
+                    <td class="py-2 font-mono text-xs">keyword-research</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">POST /api/v1/tool/keyword-research/research</code><br><code class="bg-gray-100 px-1 rounded text-xs">POST /api/v1/tool/keyword-research/status</code></td>
+                </tr>
+                <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium">Content Generator</td>
+                    <td class="py-2 font-mono text-xs">content-generator</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">POST /api/v1/tool/content-generator/generate</code><br><code class="bg-gray-100 px-1 rounded text-xs">POST /api/v1/tool/content-generator/status</code></td>
+                </tr>
+                <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium">Meta Title & Description</td>
+                    <td class="py-2 font-mono text-xs">meta-generator</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">Otomatis (Phase 4) / POST .../generate-meta</code></td>
+                </tr>
+                <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium">Schema Markup</td>
+                    <td class="py-2 font-mono text-xs">schema-markup</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">Otomatis (Phase 5) — Web UI only</code></td>
+                </tr>
+                <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium">Business Profiles</td>
+                    <td class="py-2 font-mono text-xs">—</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">GET /api/v1/business-profiles</code></td>
+                </tr>
+                <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium">SEO Analyzer</td>
+                    <td class="py-2 font-mono text-xs">seo-analyzer</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">Web UI only</code></td>
+                </tr>
+                <tr>
+                    <td class="py-2 font-medium">Meta Ads Generator</td>
+                    <td class="py-2 font-mono text-xs">meta-ads-generator</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">POST /api/meta-ads/generate (Sanctum)</code></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h3 class="font-semibold text-sm mb-2">Pipeline Otomasi Lengkap (Shell Script)</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-2">#!/bin/bash
+# ==========================================================================
+# AUTO-CONTENT PIPELINE (FULL)
+# 1. Riset keyword → 2. Ambil LSI/Entities → 3. Generate konten
+#    → 4. Meta Title & Description (otomatis) → 5. Schema Article (otomatis)
+# ==========================================================================
+API_KEY="juki_xxx"
+BASE="https://tools.test/api/v1"
+KEYWORD="strategi digital marketing 2026"
+LOCALE="id"
+TONE="informative"
+BP_ID=1                                     # ID Business Profile (opsional)
+
+echo ""
+echo "╔═══════════════════════════════════════════════════════════════╗"
+echo "║           AUTO-CONTENT PIPELINE v2.0                         ║"
+echo "╚═══════════════════════════════════════════════════════════════╝"
+echo ""
+
+# ── Step 1: Riset Keyword ────────────────────────────────────────────
+echo "━━━ [1/4] Riset Keyword: $KEYWORD ━━━"
+RESEARCH=$(curl -s -X POST "$BASE/tool/keyword-research/research" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"keyword\": \"$KEYWORD\", \"locale\": \"$LOCALE\", \"lsi_count\": 12, \"entities_count\": 7}")
+RID=$(echo "$RESEARCH" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+echo "  Research ID: $RID"
+sleep 3
+
+# ── Step 2: Tunggu Riset Selesai + Ambil Data ────────────────────────
+echo "━━━ [2/4] Mengambil Hasil Riset ━━━"
+while true; do
+  RESULT=$(curl -s -X POST "$BASE/tool/keyword-research/status" \
+    -H "X-API-Key: $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"id\": $RID}")
+  STATE=$(echo "$RESULT" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+  echo "  Status riset: $STATE"
+  [ "$STATE" = "completed" ] || [ "$STATE" = "pending" ] && break
+  sleep 5
+done
+
+# Ekstrak LSI keywords & entities dari response
+LSI=$(echo "$RESULT" | grep -o '"lsi_keywords":\[.*?\]' | sed 's/\\"/"/g')
+ENTITIES=$(echo "$RESULT" | grep -o '"entities":\[.*?\]' | sed 's/\\"/"/g')
+LSI_COUNT=$(echo "$LSI" | grep -o '"keyword"' | wc -l)
+ENT_COUNT=$(echo "$ENTITIES" | grep -o '"name"' | wc -l)
+echo "  LSI keywords: $LSI_COUNT | Entities: $ENT_COUNT"
+echo ""
+
+# ── Step 3: Generate Konten ──────────────────────────────────────────
+echo "━━━ [3/4] Generate Konten ━━━"
+CONTENT=$(curl -s -X POST "$BASE/tool/content-generator/generate" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"keyword\": \"$KEYWORD\",
+    \"locale\": \"$LOCALE\",
+    \"tone\": \"$TONE\",
+    \"business_profile_id\": $BP_ID,
+    \"lsi_keywords\": $LSI,
+    \"entities\": $ENTITIES
+  }")
+CID=$(echo "$CONTENT" | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+echo "  Content ID: $CID"
+
+# ── Step 4: Polling Sampai Selesai ───────────────────────────────────
+echo "━━━ [4/4] Menunggu Proses Selesai ━━━"
+echo "  (Fase: 1=Draft, 2=Artikel, 3=Pertanyaan, 4=Final + Meta + Schema)"
+echo ""
+while true; do
+  STATUS=$(curl -s -X POST "$BASE/tool/content-generator/status" \
+    -H "X-API-Key: $API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "{\"id\": $CID}")
+  STATE=$(echo "$STATUS" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+  PHASE=$(echo "$STATUS" | grep -o '"current_phase":[0-9]*' | cut -d: -f2)
+
+  case $PHASE in
+    0) LABEL="Draft" ;;
+    1) LABEL="Fase 1: Artikel" ;;
+    2) LABEL="Fase 2: Pertanyaan" ;;
+    3) LABEL="Fase 3: Konten Final" ;;
+    *) LABEL="Fase ${PHASE}: Proses..." ;;
+  esac
+  echo "  ⏳ Status: $STATE | $LABEL"
+
+  [ "$STATE" = "completed" ] && break
+  [ "$STATE" = "failed" ] && echo "  ❌ GAGAL!" && exit 1
+  sleep 10
+done
+
+echo ""
+echo "╔═══════════════════════════════════════════════════════════════╗"
+echo "║                        HASIL                                 ║"
+echo "╚═══════════════════════════════════════════════════════════════╝"
+echo ""
+
+# ── Ekstrak & Tampilkan Semua Output ─────────────────────────────────
+MTITLE=$(echo "$STATUS" | grep -o '"meta_title":"[^"]*"' | cut -d'"' -f4)
+MDESC=$(echo "$STATUS" | grep -o '"meta_description":"[^"]*"' | cut -d'"' -f4)
+P1=$(echo "$STATUS" | grep -o '"phase_1_content":"[^"]*"' | cut -d'"' -f4)
+P3=$(echo "$STATUS" | grep -o '"phase_3_content":"[^"]*"' | cut -d'"' -f4)
+P3_LEN=$(echo "$P3" | wc -c)
+P1_LEN=$(echo "$P1" | wc -c)
+
+echo "━━━ META TITLE ━━━"
+echo "  $MTITLE"
+echo ""
+echo "━━━ META DESCRIPTION ━━━"
+echo "  $MDESC"
+echo ""
+echo "━━━ RINGKASAN ━━━"
+echo "  Keyword       : $KEYWORD"
+echo "  Content ID    : $CID"
+echo "  Panjang Fase 1: ${P1_LEN} chars"
+echo "  Panjang Final : ${P3_LEN} chars"
+echo ""
+echo "━━━ DETAIL ARTIKEL ━━━"
+echo "  Buka di browser: https://tools.test/content-generator/$CID"
+echo ""
+echo "━━━ SCHEMA MARKUP ━━━"
+echo "  Schema Article otomatis tergenerate (ID terhubung ke content #$CID)."
+echo "  Cek di: https://tools.test/content-generator/$CID ?tab=schema"
+echo "  Atau lihat semua schema: https://tools.test/schema-markup"
+echo ""
+
+# ── Simpan ke File (opsional) ────────────────────────────────────────
+# echo "$P3" > "artikel-${CID}.md"
+# echo "  📄 Artikel disimpan ke: artikel-${CID}.md"
+echo "✅ PIPELINE SELESAI"</pre>
+    </div>
+
+    {{-- Cara Mendapatkan API Key --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">1. Mendapatkan API Key</h2>
+        <p class="text-sm text-gray-600 mb-3">Setiap tool bisa diakses via API menggunakan API Key. Buat key baru di halaman <a href="{{ route('api-keys.index') }}" class="text-indigo-600 underline">API Keys</a>.</p>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200">API Key format: juki_{random}
+Header: X-API-Key: juki_{random}
+Alternatif: Authorization: Bearer juki_{random}</pre>
+    </div>
+
+    {{-- Queue Worker --}}
+    <div class="bg-yellow-50 border border-yellow-200 p-6 rounded-xl">
+        <h2 class="text-lg font-bold mb-3 text-yellow-800">2. Queue Worker</h2>
+        <p class="text-sm text-yellow-700 mb-3">Proses generate konten berjalan di background via queue. Ada 2 cara:</p>
+
+        <h3 class="font-semibold text-sm mb-1 text-yellow-800">Cara Manual</h3>
+        <pre class="bg-yellow-100 p-3 rounded-lg text-sm font-mono border border-yellow-300 mb-4">php artisan queue:work --timeout=240</pre>
+
+        <h3 class="font-semibold text-sm mb-1 text-yellow-800">Cara Otomatis (Direkomendasikan)</h3>
+        <p class="text-sm text-yellow-700 mb-2">Sistem akan auto-start queue worker di background setiap kali ada konten baru yang dibuat atau fase di-retry. Cukup klik "Buat Konten" — worker menyala sendiri.</p>
+        <p class="text-sm text-yellow-700 mb-3">Status worker bisa dilihat di dashboard <a href="{{ route('contentgenerator.index') }}" class="text-yellow-900 underline font-semibold">Content Generator</a>:
+        <span class="inline-block w-3 h-3 rounded-full bg-green-500 align-middle mx-1"></span> Hijau = berjalan,
+        <span class="inline-block w-3 h-3 rounded-full bg-red-500 align-middle mx-1"></span> Merah = macet,
+        <span class="inline-block w-3 h-3 rounded-full bg-yellow-500 align-middle mx-1"></span> Kuning = idle.</p>
+
+        <div class="bg-yellow-100 p-3 rounded-lg text-sm border border-yellow-300">
+            <p class="text-yellow-800 font-medium">Auto-Retry:</p>
+            <p class="text-yellow-700 mt-1">Jika job gagal, sistem otomatis coba ulang 3 kali dengan jeda 10s → 30s → 60s. Setelah 15 menit tanpa selesai, job dianggap gagal permanen. Tombol 🔄 Retry Semua di dashboard untuk requeue job yang gagal.</p>
+        </div>
+    </div>
+
+    {{-- Content Generator --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">3. Content Generator</h2>
+        <p class="text-sm text-gray-600 mb-3">Generate artikel dalam 4 fase: draft artikel, pertanyaan kritis, artikel final, meta SEO. Dilengkapi progress bar real-time dan auto-retry.</p>
+
+        <h3 class="font-semibold text-sm mb-2">Fitur Baru</h3>
+        <ul class="list-disc list-inside text-sm text-gray-600 space-y-1 mb-4">
+            <li><strong>Progress Bar:</strong> Visual 4 langkah (Antrian → Artikel → Pertanyaan → Konten Final) dengan animasi pulse</li>
+            <li><strong>Auto-fill Keyword:</strong> Pilih riset keyword → keyword target terisi otomatis</li>
+            <li><strong>Filter Riset:</strong> Riset yang sudah punya konten selesai tidak muncul di daftar</li>
+            <li><strong>Profil Bisnis:</strong> Pilih profil → info bisnis disisipkan AI ke artikel</li>
+            <li><strong>Meta SEO:</strong> Auto-generate title & description high-CTR (lihat section #4)</li>
+            <li><strong>Rating & Feedback:</strong> Bintang 1-5 + jadikan referensi + catatan untuk AI</li>
+            <li><strong>Dashboard Stats:</strong> Total rekues, berhasil, antrian, gagal, user aktif + lampu status worker</li>
+        </ul>
+
+        <h3 class="font-semibold text-sm mb-2">Endpoint API Eksternal: Generate</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">POST /api/v1/tool/content-generator/generate
+X-API-Key: juki_{key}
+Content-Type: application/json
+
+{
+    "keyword": "topik artikel",
+    "locale": "id",
+    "tone": "informative",
+    "business_profile_id": 1,
+    "lsi_keywords": [
+        {"keyword": "kata kunci terkait 1"},
+        {"keyword": "kata kunci terkait 2"}
+    ],
+    "entities": [
+        {"name": "Nama Entity", "type": "Jenis"}
+    ]
+}</pre>
+
+        <h3 class="font-semibold text-sm mb-2">Cek Status + Ambil Hasil</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">POST /api/v1/tool/content-generator/status
+X-API-Key: juki_{key}
+Content-Type: application/json
+
+{"id": 1}
+
+Response:
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "target_keyword": "topik artikel",
+    "status": "completed",
+    "current_phase": 3,
+    "phase_1_content": "...",
+    "phase_2_questions": [...],
+    "phase_3_content": "...",
+    "meta_title": "Judul SEO Friendly [Panduan 2026]",
+    "meta_description": "Baca panduan lengkap...",
+    "created_at": "...",
+    "updated_at": "..."
+  }
+}</pre>
+
+        <h3 class="font-semibold text-sm mb-2">Parameter Lengkap</h3>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-200">
+                    <th class="text-left py-2 font-medium text-gray-600">Parameter</th>
+                    <th class="text-left py-2 font-medium text-gray-600">Wajib</th>
+                    <th class="text-left py-2 font-medium text-gray-600">Deskripsi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">keyword</td><td class="py-2 text-green-600">Ya</td><td class="py-2">Target keyword artikel</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">locale</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">id / en (default: id)</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">tone</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">informative, formal, casual, persuasive, storytelling, instructional</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">lsi_keywords</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">Array LSI keywords dari hasil riset</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">entities</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">Array entities dari hasil riset</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">business_profile_id</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">ID Profil Bisnis — info bisnis disisipkan ke artikel + dipakai schema</td></tr>
+                <tr><td class="py-2 font-mono text-xs">keyword_research_id</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">ID riset keyword (ambil LSI/entities otomatis)</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    {{-- Meta Title & Description --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">4. Meta Title & Description Generator</h2>
+        <p class="text-sm text-gray-600 mb-3">Generate Meta Title (max 65 karakter) dan Meta Description (max 165 karakter) dengan fokus High CTR. Menggunakan power words, angka, bracket, value proposition, dan micro-CTA.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-green-700 uppercase tracking-wider">Cara Kerja</p>
+                <ul class="text-sm text-green-700 mt-2 space-y-1 list-disc list-inside">
+                    <li>Otomatis setelah Fase 3 selesai (jika tool aktif)</li>
+                    <li>Baca keyword target + konten Fase 3 + LSI keywords</li>
+                    <li>Bisa regenerate manual kapan saja</li>
+                    <li>Lihat preview Google SERP di tab "Meta SEO"</li>
+                </ul>
+            </div>
+            <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-indigo-700 uppercase tracking-wider">Prompt AI</p>
+                <ul class="text-sm text-indigo-700 mt-2 space-y-1 list-disc list-inside">
+                    <li>Title: mengandung keyword, power words, bracket</li>
+                    <li>Description: value proposition di awal, keyword 1-2x</li>
+                    <li>Micro-CTA di akhir description</li>
+                    <li>Output JSON: {"title": "...", "description": "..."}</li>
+                </ul>
+            </div>
+        </div>
+
+        <h3 class="font-semibold text-sm mb-2">Endpoint API</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">POST /api/v1/tool/content-generator/generate-meta
+X-API-Key: juki_{key}
+Content-Type: application/json
+
+{"id": 1}
+
+Response:
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "meta_title": "7 Cara Digital Marketing [Panduan 2026]",
+    "meta_description": "Tingkatkan penjualan dengan 7 strategi digital marketing terbaru. Cocok untuk UMKM dan pebisnis online. Pelajari selengkapnya!"
+  }
+}</pre>
+
+        <p class="text-sm text-gray-600">Lihat preview & regenerate dari halaman detail Content Generator → tab <strong>"Meta SEO"</strong>.</p>
+    </div>
+
+    {{-- Business Profiles --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">5. Business Profiles (Profil Bisnis)</h2>
+        <p class="text-sm text-gray-600 mb-3">Simpan informasi bisnis/website Anda agar AI bisa menyisipkannya secara natural ke dalam artikel. Data ini ditambahkan ke prompt Fase 1 sebagai konteks bisnis. Cocok untuk SEO lokal, konten marketing, dan branding.</p>
+
+        <h3 class="font-semibold text-sm mb-2">Semua Field</h3>
+        <table class="w-full text-sm mb-4">
+            <thead>
+                <tr class="border-b border-gray-200">
+                    <th class="text-left py-2 font-medium text-gray-600">Field</th>
+                    <th class="text-left py-2 font-medium text-gray-600">Keterangan</th>
+                    <th class="text-left py-2 font-medium text-gray-600">Disisipkan ke Prompt</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">name *</td><td class="py-2">Nama profil (internal)</td><td class="py-2 text-gray-400">—</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">business_name</td><td class="py-2">Nama bisnis/perusahaan</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">website_url</td><td class="py-2">URL website</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">description</td><td class="py-2">Deskripsi bisnis</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">products_services</td><td class="py-2">Produk/jasa yang dijual</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">target_audience</td><td class="py-2">Target pasar</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">usp</td><td class="py-2">Keunggulan (Unique Selling Points)</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">contact_email</td><td class="py-2">Email kontak</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">contact_phone</td><td class="py-2">Telepon</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">address</td><td class="py-2">Alamat</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">business_hours</td><td class="py-2">Jam operasional</td><td class="py-2 text-green-600">✅</td></tr>
+                <tr><td class="py-2 font-mono text-xs">social_media</td><td class="py-2">JSON object (instagram, facebook, twitter, youtube, tiktok, linkedin)</td><td class="py-2 text-green-600">✅</td></tr>
+            </tbody>
+        </table>
+
+        <h3 class="font-semibold text-sm mb-2">API Endpoint</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">GET /api/v1/business-profiles
+Headers: X-API-Key: juki_{key}
+
+Response:
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Website Utama",
+      "business_name": "PT. Contoh Sejahtera",
+      "website_url": "https://contoh.com",
+      "description": "Perusahaan yang bergerak di bidang...",
+      "products_services": "Jasa SEO, Web Development",
+      "target_audience": "UMKM dan pebisnis online",
+      "usp": "Sudah dipercaya 500+ klien"
+    }
+  ]
+}</pre>
+
+        <h3 class="font-semibold text-sm mb-2">Menggunakan di Content Generator</h3>
+        <p class="text-sm text-gray-600 mb-3">Via Web: Pilih dari dropdown "Profil Bisnis" di form create. Via API: tambahkan field <code class="bg-gray-100 px-1 rounded">business_profile_id</code>.</p>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">curl -X POST https://tools.test/api/v1/tool/content-generator/generate \
+  -H "X-API-Key: juki_{key}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "keyword": "jasa seo murah",
+    "locale": "id",
+    "tone": "informative",
+    "business_profile_id": 1
+  }'</pre>
+
+        <p class="text-sm text-gray-600">Atur profil di menu <a href="{{ route('business-profiles.index') }}" class="text-indigo-600 underline">🏢 Profil Bisnis</a>.</p>
+    </div>
+
+    {{-- Keyword Research --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">6. Keyword Research</h2>
+        <p class="text-sm text-gray-600 mb-3">Riset keyword dengan LSI keywords dan entities secara otomatis via AI.</p>
+
+        <h3 class="font-semibold text-sm mb-2">Endpoint API Eksternal</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">POST /api/v1/keyword-research/research
+X-API-Key: juki_{key}
+Content-Type: application/json
+
+{
+    "keyword": "topik riset",
+    "locale": "id",
+    "lsi_count": 15,
+    "entities_count": 10,
+    "webhook_url": "https://webhook.example.com/callback",
+    "webhook_secret": "secret123"
+}</pre>
+
+        <h3 class="font-semibold text-sm mb-2">Cek Status Riset</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">GET /api/v1/keyword-research/research/{id}
+X-API-Key: juki_{key}</pre>
+    </div>
+
+    {{-- Sistem Memori & Feedback --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">7. Sistem Memori & Feedback</h2>
+        <p class="text-sm text-gray-600 mb-3">Setiap artikel yang berhasil digenerate disimpan sebagai memori. Sistem belajar dari konten terbaik untuk generasi berikutnya.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <h3 class="font-semibold text-sm mb-2">Cara Kerja Memori</h3>
+                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                    <li>Setiap Phase 3 selesai → simpan keyword + ringkasan + embedding</li>
+                    <li>Saat konten baru → cari 3 memori terdekat (cosine similarity / keyword)</li>
+                    <li>Memori disisipkan ke prompt Fase 1 sebagai referensi gaya</li>
+                    <li>Embedding: 9Router text-embedding-3-small, fallback keyword overlap</li>
+                </ul>
+            </div>
+            <div class="bg-yellow-50 p-4 rounded-lg">
+                <h3 class="font-semibold text-sm mb-2">Feedback & Rating</h3>
+                <ul class="list-disc list-inside text-sm text-yellow-700 space-y-1">
+                    <li><strong>Rating ⭐ 1-5:</strong> Nilai kualitas artikel</li>
+                    <li><strong>Jadikan Referensi:</strong> Tandai sebagai konten terbaik</li>
+                    <li><strong>Catatan:</strong> Feedback spesifik untuk AI</li>
+                    <li>Memori referensi mendapat <strong>+0.4 boost</strong> skor</li>
+                    <li>Rating tinggi → <strong>+0.1 per poin > 3</strong></li>
+                </ul>
+            </div>
+        </div>
+
+        <h3 class="font-semibold text-sm mb-2">Tabel Database generation_memories</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200">generation_memories
+  - id, user_id, content_generation_id
+  - keyword, locale, tone
+  - lsi_keywords, entities (JSON)
+  - summary (500 char), embedding (vector text)
+  - quality_score (1-5), is_reference (boolean)
+  - feedback (text)
+  - created_at, updated_at</pre>
+    </div>
+
+    {{-- Schema Markup Generator --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">8. Schema Markup Generator</h2>
+        <p class="text-sm text-gray-600 mb-3">Buat JSON-LD schema.org untuk 10 tipe konten: Article, FAQPage, Product, LocalBusiness, BreadcrumbList, Review, Recipe, VideoObject, HowTo, Event. Bisa auto-fill dari konten Content Generator yang sudah selesai, dilengkapi AI enhancement.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-blue-700 uppercase tracking-wider">Fitur</p>
+                <ul class="text-sm text-blue-700 mt-2 space-y-1 list-disc list-inside">
+                    <li>10 tipe schema lengkap dengan field spesifik</li>
+                    <li>Auto-fill data dari konten Content Generator yang completed</li>
+                    <li>AI enhancement — isi otomatis data yang kurang</li>
+                    <li>Preview JSON-LD + copy script tag siap pakai</li>
+                    <li>Regenerate kapan saja (manual ↔ AI)</li>
+                    <li>Tautan validasi: Google Rich Results Test & Schema.org Validator</li>
+                </ul>
+            </div>
+            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-purple-700 uppercase tracking-wider">Tipe Schema</p>
+                <ul class="text-sm text-purple-700 mt-2 space-y-1 list-disc list-inside columns-2">
+                    <li>Article</li>
+                    <li>FAQPage</li>
+                    <li>Product</li>
+                    <li>LocalBusiness</li>
+                    <li>BreadcrumbList</li>
+                    <li>Review</li>
+                    <li>Recipe</li>
+                    <li>VideoObject</li>
+                    <li>HowTo</li>
+                    <li>Event</li>
+                </ul>
+            </div>
+        </div>
+
+        <h3 class="font-semibold text-sm mb-2">Auto-fill dari Content Generator</h3>
+        <p class="text-sm text-gray-600 mb-3">Pilih konten yang sudah completed → data terisi otomatis:</p>
+        <table class="w-full text-sm mb-4">
+            <thead>
+                <tr class="border-b border-gray-200">
+                    <th class="text-left py-2 font-medium text-gray-600">Tipe Schema</th>
+                    <th class="text-left py-2 font-medium text-gray-600">Auto-fill dari Konten</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs font-medium">Article</td><td class="py-2">headline → meta_title, description → meta_description, articleBody → phase_3_content, datePublished → created_at, author → user.name</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs font-medium">FAQPage</td><td class="py-2">FAQ items → phase_2_questions (question + answer)</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs font-medium">Product</td><td class="py-2">name → meta_title, description → meta_description/keyword, brand → dari Business Profile</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs font-medium">LocalBusiness</td><td class="py-2">Semua field dari Business Profile terkait (nama, alamat, telepon, jam operasional, sosial media)</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs font-medium">BreadcrumbList</td><td class="py-2">Items → Home + judul konten</td></tr>
+                <tr><td class="py-2 font-mono text-xs font-medium">HowTo</td><td class="py-2">name → meta_title, description → meta_description, body → phase_3_content</td></tr>
+            </tbody>
+        </table>
+
+        <h3 class="font-semibold text-sm mb-2">AI Enhancement</h3>
+        <p class="text-sm text-gray-600 mb-3">Centang "Gunakan AI" saat create → AI akan melengkapi field yang kosong dan mengoptimalkan struktur schema. Data yang sudah diisi manual tetap dipertahankan.</p>
+
+        <h3 class="font-semibold text-sm mb-2">Cara Penggunaan</h3>
+        <ol class="list-decimal list-inside text-sm text-gray-600 space-y-1 mb-4">
+            <li>Buka <a href="{{ route('schema-markup.create') }}" class="text-indigo-600 underline">Buat Schema Markup</a></li>
+            <li>Pilih tipe schema</li>
+            <li>(Opsional) Pilih konten Content Generator yang completed → data terisi otomatis</li>
+            <li>Isi/ubah field manual sesuai kebutuhan</li>
+            <li>(Opsional) Centang "Gunakan AI" untuk optimasi AI</li>
+            <li>Klik Generate → lihat preview JSON-LD + script tag</li>
+            <li>Copy script tag → paste di &lt;head&gt; halaman website</li>
+        </ol>
+
+        <h3 class="font-semibold text-sm mb-2">Validasi</h3>
+        <p class="text-sm text-gray-600 mb-3">Dari halaman detail, klik tombol validasi untuk mengecek ke Google Rich Results Test atau Schema.org Validator.</p>
+    </div>
+
+    {{-- Tips --}}
+    <div class="bg-indigo-50 border border-indigo-200 p-6 rounded-xl">
+        <h2 class="text-lg font-bold mb-3 text-indigo-800">9. Tips Penggunaan</h2>
+        <ul class="space-y-2 text-sm text-indigo-700">
+            <li><strong>Pipeline otomatis (lengkap):</strong> Keyword Research → Content Generator → Meta SEO → Schema Markup — semua dalam 1 script. Mulai dari riset keyword hingga schema Article siap pakai. Lihat contoh shell script di section #0.</li>
+            <li><strong>Queue worker:</strong> Tidak perlu manual — auto-start saat ada konten baru. Cek status lampu di dashboard.</li>
+            <li><strong>Kualitas konten:</strong> Gunakan riset keyword dulu, pilih profil bisnis, beri rating untuk feedback ke AI.</li>
+            <li><strong>Profil Bisnis:</strong> Buat beberapa profil (misal: "Website A" dan "Toko B") — pilih sesuai kebutuhan konten.</li>
+            <li><strong>Meta SEO:</strong> Generate otomatis setelah konten selesai. Regenerate jika perlu. Copy title/description langsung dari tab Meta.</li>
+            <li><strong>Retry otomatis:</strong> Job gagal di-retry 3 kali dengan jeda meningkat. Tombol 🔄 Retry Semua di dashboard untuk failed jobs.</li>
+            <li><strong>Schema Markup:</strong> Auto-fill dari konten Content Generator + AI enhancement untuk hasil optimal. Jangan lupa validasi di Google Rich Results Test.</li>
+            <li><strong>SEO Analyzer:</strong> Gratis — cek on-page SEO URL manapun tanpa biaya. Ideal untuk audit cepat sebelum publikasi.</li>
+            <li><strong>Webhook:</strong> Keyword Research bisa kirim hasil ke URL kamu setelah selesai (parameter webhook_url).</li>
+        </ul>
+    </div>
+</div>
+@endsection

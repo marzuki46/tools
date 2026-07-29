@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Tools\Tool;
+use App\Models\Websites\Website;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -15,6 +17,7 @@ use Laravel\Sanctum\HasApiTokens;
     'name',
     'email',
     'password',
+    'is_admin',
 ])]
 #[Hidden([
     'password',
@@ -29,6 +32,8 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'suspended_at' => 'datetime',
+            'is_admin' => 'boolean',
         ];
     }
 
@@ -46,9 +51,16 @@ class User extends Authenticatable
 
     public function activeTools(): BelongsToMany
     {
-        return $this->tools()->wherePivot('is_active', true)->where('tools.is_active', true);
+        return $this->tools()
+            ->wherePivot('is_active', true)
+            ->where('tools.is_active', true);
     }
-    
+
+    public function websites(): HasMany
+    {
+        return $this->hasMany(Website::class);
+    }
+
     public function hasToolAccess(string $slug): bool
     {
         return $this->activeTools()->where('tools.slug', $slug)->exists();

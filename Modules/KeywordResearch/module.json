@@ -1,0 +1,11 @@
+{
+    "name": "KeywordResearch",
+    "alias": "keywordresearch",
+    "description": "Modul riset keyword dengan LSI & entitas, webhook, dan queue",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\KeywordResearch\\Providers\\KeywordResearchServiceProvider"
+    ],
+    "files": []
+}

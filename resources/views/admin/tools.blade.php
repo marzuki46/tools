@@ -40,7 +40,7 @@
                                     {{ $tool->is_active ? 'Deactivate' : 'Activate' }}
                                 </button>
                             </form>
-                            <a href="{{ route('admin.tool-users', $tool) }}" class="text-gray-500 hover:text-gray-700 text-xs font-medium">
+                            <a href="{{ route('admin.tools.users', $tool) }}" class="text-gray-500 hover:text-gray-700 text-xs font-medium">
                                 Manage Users
                             </a>
                         </td>

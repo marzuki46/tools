@@ -32,7 +32,13 @@
             "Database\\Seeders\\": "database/seeders/",
             "Modules\\MetaAdsImageGenerator\\": "Modules/MetaAdsImageGenerator/app/",
             "Modules\\MetaAdsImageGenerator\\Database\\Factories\\": "Modules/MetaAdsImageGenerator/database/factories/",
-            "Modules\\MetaAdsImageGenerator\\Database\\Seeders\\": "Modules/MetaAdsImageGenerator/database/seeders/"
+            "Modules\\MetaAdsImageGenerator\\Database\\Seeders\\": "Modules/MetaAdsImageGenerator/database/seeders/",
+            "Modules\\KeywordResearch\\": "Modules/KeywordResearch/app/",
+            "Modules\\KeywordResearch\\Database\\Factories\\": "Modules/KeywordResearch/database/factories/",
+            "Modules\\KeywordResearch\\Database\\Seeders\\": "Modules/KeywordResearch/database/seeders/",
+            "Modules\\ContentGenerator\\": "Modules/ContentGenerator/app/",
+            "Modules\\ContentGenerator\\Database\\Factories\\": "Modules/ContentGenerator/database/factories/",
+            "Modules\\ContentGenerator\\Database\\Seeders\\": "Modules/ContentGenerator/database/seeders/"
         }
     },
     "autoload-dev": {

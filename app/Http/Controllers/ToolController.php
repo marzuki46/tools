@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tool;
+use App\Models\Tools\Tool;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -22,19 +22,18 @@ class ToolController extends Controller
 
     public function toggle(Request $request, Tool $tool)
     {
+        abort_unless(Auth::user()->is_admin, 403);
         Auth::user()->tools()->toggle([$tool->id => ['is_active' => true]]);
-
         $enabled = Auth::user()->tools()->where('tool_id', $tool->id)->exists();
         $message = $enabled
             ? "{$tool->name} has been added to your account."
             : "{$tool->name} has been removed from your account.";
-
         return redirect()->route('tools.index')->with('success', $message);
     }
 
     private function authorizeAdmin(): void
     {
-        abort_unless(Auth::user()->email === 'admin@juki-tools.test', 403, 'Admin access required.');
+        abort_unless(Auth::user()->is_admin, 403, 'Admin access required.');
     }
 
     public function adminIndex()
@@ -75,7 +74,7 @@ class ToolController extends Controller
 
         $user->tools()->toggle($tool->id);
 
-        return redirect()->route('admin.tool-users', $tool)
+        return redirect()->route('admin.tools.users', $tool)
             ->with('success', "Access for {$user->name} updated.");
     }
 }

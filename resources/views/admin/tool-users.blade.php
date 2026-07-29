@@ -38,7 +38,7 @@
                             @endif
                         </td>
                         <td class="px-6 py-4">
-                            <form method="POST" action="{{ route('admin.tool-users.toggle', [$tool, $user]) }}" class="inline">
+                            <form method="POST" action="{{ route('admin.tools.toggle-user', [$tool, $user]) }}" class="inline">
                                 @csrf
                                 <button type="submit" class="text-xs font-medium {{ $hasAccess ? 'text-red-500 hover:text-red-700' : 'text-indigo-600 hover:text-indigo-800' }}">
                                     {{ $hasAccess ? 'Revoke' : 'Grant Access' }}

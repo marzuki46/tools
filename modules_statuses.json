@@ -1,4 +1,6 @@
 {
     "MetaAdsGenerator": true,
-    "MetaAdsImageGenerator": true
+    "MetaAdsImageGenerator": true,
+    "KeywordResearch": true,
+    "ContentGenerator": true
 }

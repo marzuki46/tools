@@ -1,0 +1,11 @@
+{
+    "name": "ContentGenerator",
+    "alias": "contentgenerator",
+    "description": "Modul pembuatan konten AI dengan fase artikel, pertanyaan kritis, dan konten final",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\ContentGenerator\\Providers\\ContentGeneratorServiceProvider"
+    ],
+    "files": []
+}

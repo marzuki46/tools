@@ -14,6 +14,7 @@ return [
             'url' => env('NINEROUTER_URL'),
             'api_key' => env('NINEROUTER_KEY'),
             'model' => env('META_ADS_9ROUTER_MODEL', 'openai/dall-e-3'),
+            'chat_model' => env('META_ADS_9ROUTER_CHAT_MODEL', 'openai/gpt-4o'),
         ],
     ],
 

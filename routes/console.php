@@ -2,17 +2,16 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
-use Juki\MetaAdsGenerator\Models\AdProject;
 use App\Models\User;
-use Illuminate\Support\Facades\Http;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-use Juki\MetaAdsGenerator\Models\AdGeneration;
-use Juki\MetaAdsGenerator\Jobs\GenerateAdCreativeJob;
-use Juki\MetaAdsGenerator\Services\PromptBuilderService;
+use Modules\MetaAdsImageGenerator\Models\AdProject;
+use Modules\MetaAdsImageGenerator\Models\AdGeneration;
+use Modules\MetaAdsImageGenerator\Jobs\GenerateAdCreativeJob;
+use Modules\MetaAdsImageGenerator\Services\PromptBuilderService;
 
 Artisan::command('test:meta-ads', function () {
     $this->info('Membuat User & Project dummy...');

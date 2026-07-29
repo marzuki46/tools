@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\Tool;
+use App\Models\Tools\Tool;
 use Illuminate\Database\Seeder;
 
 class ToolSeeder extends Seeder
@@ -21,10 +21,26 @@ class ToolSeeder extends Seeder
             [
                 'name' => 'SEO Analyzer',
                 'slug' => 'seo-analyzer',
-                'description' => 'Analyze and optimize your website for search engines with actionable insights.',
+                'description' => 'Analisis on-page SEO gratis: title, meta, heading, konten, gambar, link, OG tags, canonical, robots.',
                 'icon' => 'seo',
                 'package_name' => null,
-                'is_active' => false,
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Meta Title & Description Generator',
+                'slug' => 'meta-generator',
+                'description' => 'Generate SEO meta title & description high-CTR dari konten yang sudah dibuat.',
+                'icon' => 'meta',
+                'package_name' => null,
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Schema Markup Generator',
+                'slug' => 'schema-markup',
+                'description' => 'Buat JSON-LD schema.org untuk Article, FAQ, Product, LocalBusiness, BreadcrumbList, Review, Recipe, Video, HowTo, Event — auto-fill dari konten & AI.',
+                'icon' => 'schema',
+                'package_name' => null,
+                'is_active' => true,
             ],
         ];
 

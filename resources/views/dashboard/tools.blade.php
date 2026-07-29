@@ -6,10 +6,10 @@
 <div class="space-y-6">
     <div>
         <h1 class="text-2xl font-bold">Available Tools</h1>
-        <p class="text-gray-500 text-sm mt-1">Enable tools you want to use in your account</p>
+        <p class="text-gray-500 text-sm mt-1">Tools yang tersedia di platform. Hubungi admin untuk mengaktifkan akses.</p>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
         @foreach ($tools as $tool)
             @php $enabled = in_array($tool->id, $userToolIds); @endphp
             <div class="bg-white rounded-xl shadow-sm border {{ $enabled ? 'border-indigo-200' : 'border-gray-200' }} p-6 transition hover:shadow-md">
@@ -28,23 +28,58 @@
                             <p class="text-xs text-gray-400 mt-2 font-mono">{{ $tool->package_name }}</p>
                         @endif
                     </div>
-                    <form method="POST" action="{{ route('tools.toggle', $tool) }}" class="ml-4">
-                        @csrf
-                        @if ($tool->is_active)
-                            <button type="submit"
-                                class="relative inline-flex h-6 w-11 items-center rounded-full transition {{ $enabled ? 'bg-indigo-600' : 'bg-gray-300' }}">
-                                <span class="inline-block h-4 w-4 transform rounded-full bg-white transition {{ $enabled ? 'translate-x-6' : 'translate-x-1' }}"></span>
-                            </button>
+                    <div class="ml-4">
+                        @if ($enabled)
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                                Active
+                            </span>
+                        @elseif ($tool->is_active)
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 border border-gray-200">
+                                {{-- Inactive --}}
+                            </span>
                         @else
                             <span class="text-xs text-gray-400 italic">Unavailable</span>
                         @endif
-                    </form>
+                    </div>
                 </div>
                 @if ($enabled && $tool->slug === 'meta-ads-generator')
                     <div class="mt-4 pt-4 border-t border-gray-100">
-                        <a href="#" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                        <a href="{{ route('metaadsimagegenerator.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
                             Open Meta Ads Generator &rarr;
                         </a>
+                    </div>
+                @endif
+                @if ($enabled && $tool->slug === 'keyword-research')
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <a href="{{ route('keywordresearch.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                            Open Keyword Research &rarr;
+                        </a>
+                    </div>
+                @endif
+                @if ($enabled && $tool->slug === 'content-generator')
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <a href="{{ route('contentgenerator.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                            Open Content Generator &rarr;
+                        </a>
+                    </div>
+                @endif
+                @if ($enabled && $tool->slug === 'schema-markup')
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <a href="{{ route('schema-markup.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                            Open Schema Markup Generator &rarr;
+                        </a>
+                    </div>
+                @endif
+                @if ($enabled && $tool->slug === 'seo-analyzer')
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <a href="{{ route('seo-analyzer.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                            Open SEO Analyzer &rarr;
+                        </a>
+                    </div>
+                @endif
+                @if (!$enabled && $tool->is_active)
+                    <div class="mt-3 pt-3 border-t border-gray-100">
+                        <p class="text-xs text-gray-400">Tool ini belum aktif. Hubungi admin untuk aktivasi.</p>
                     </div>
                 @endif
             </div>
