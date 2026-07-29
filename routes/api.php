@@ -42,4 +42,7 @@ Route::prefix('v1')->middleware(['api-key'])->group(function () {
 
     // Business Profiles API
     Route::get('/business-profiles', [\App\Http\Controllers\BusinessProfileController::class, 'apiList']);
+    Route::post('/business-profiles', [\App\Http\Controllers\BusinessProfileController::class, 'apiStore']);
+    Route::put('/business-profiles/{businessProfile}', [\App\Http\Controllers\BusinessProfileController::class, 'apiUpdate']);
+    Route::delete('/business-profiles/{businessProfile}', [\App\Http\Controllers\BusinessProfileController::class, 'apiDestroy']);
 });

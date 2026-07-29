@@ -14,7 +14,7 @@
         <div class="space-y-3">
             <div>
                 <p class="text-xs font-semibold text-gray-500 uppercase mb-1">Base URL</p>
-                <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200">https://tools.test/api/v1/tool/{slug}/{action}</pre>
+                <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200">https://tools.juki.eu.org/api/v1/tool/{slug}/{action}</pre>
             </div>
             <div>
                 <p class="text-xs font-semibold text-gray-500 uppercase mb-1">Authentication</p>
@@ -85,13 +85,13 @@ Body: {{ $a['body'] }}</pre>
         <h2 class="text-lg font-bold mb-4">Contoh Lengkap</h2>
         <div class="space-y-3">
             <p class="text-sm text-gray-600">Buat riset keyword baru:</p>
-            <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 overflow-x-auto">curl -X POST https://tools.test/api/v1/tool/keyword-research/research \
+            <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 overflow-x-auto">curl -X POST https://tools.juki.eu.org/api/v1/tool/keyword-research/research \
   -H "X-API-Key: juki_{key}" \
   -H "Content-Type: application/json" \
   -d '{"keyword": "kopi nusantara", "locale": "id", "lsi_count": 12, "entities_count": 7}'</pre>
 
             <p class="text-sm text-gray-600 mt-3">Cek status riset:</p>
-            <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 overflow-x-auto">curl -X POST https://tools.test/api/v1/tool/keyword-research/status \
+            <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 overflow-x-auto">curl -X POST https://tools.juki.eu.org/api/v1/tool/keyword-research/status \
   -H "X-API-Key: juki_{key}" \
   -H "Content-Type: application/json" \
   -d '{"id": 1}'</pre>

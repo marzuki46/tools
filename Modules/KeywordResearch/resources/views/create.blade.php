@@ -66,7 +66,7 @@
     <div class="bg-gray-50 border border-gray-200 p-5 rounded-xl">
         <h3 class="text-sm font-semibold text-gray-700">Gunakan API</h3>
         <p class="text-xs text-gray-500 mt-1">Akses Keyword Research via API endpoint terpusat. <a href="{{ route('keywordresearch.index') }}" class="text-indigo-600 hover:text-indigo-800">Lihat dokumentasi API</a>.</p>
-        <pre class="bg-white p-3 rounded-lg text-xs font-mono border border-gray-200 mt-2 overflow-x-auto">curl -X POST https://tools.test/api/v1/tool/keyword-research/research \
+        <pre class="bg-white p-3 rounded-lg text-xs font-mono border border-gray-200 mt-2 overflow-x-auto">curl -X POST https://tools.juki.eu.org/api/v1/tool/keyword-research/research \
   -H "X-API-Key: juki_{your_api_key}" \
   -H "Content-Type: application/json" \
   -d '{"keyword":"...","lsi_count":12,"entities_count":7}'</pre>

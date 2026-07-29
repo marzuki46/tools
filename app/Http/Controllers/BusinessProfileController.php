@@ -117,6 +117,82 @@ class BusinessProfileController extends Controller
         return response()->json(['data' => $profiles]);
     }
 
+    public function apiStore(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'business_name' => 'nullable|string|max:255',
+            'website_url' => 'nullable|url|max:255',
+            'description' => 'nullable|string',
+            'products_services' => 'nullable|string',
+            'target_audience' => 'nullable|string|max:255',
+            'usp' => 'nullable|string',
+            'business_hours' => 'nullable|string|max:255',
+            'contact_email' => 'nullable|email|max:255',
+            'contact_phone' => 'nullable|string|max:50',
+            'address' => 'nullable|string|max:255',
+            'social_media' => 'nullable|array',
+            'is_default' => 'boolean',
+        ]);
+
+        $userId = $request->user()->id;
+
+        if ($request->boolean('is_default')) {
+            BusinessProfile::forUser($userId)->update(['is_default' => false]);
+        }
+
+        $validated['user_id'] = $userId;
+        $validated['is_default'] = $request->boolean('is_default');
+
+        $profile = BusinessProfile::create($validated);
+
+        return response()->json(['success' => true, 'message' => 'Profil bisnis berhasil dibuat.', 'data' => $profile], 201);
+    }
+
+    public function apiUpdate(Request $request, BusinessProfile $businessProfile): JsonResponse
+    {
+        $userId = $request->user()->id;
+        if ($businessProfile->user_id !== $userId) {
+            return response()->json(['success' => false, 'message' => 'You do not own this profile.'], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'business_name' => 'nullable|string|max:255',
+            'website_url' => 'nullable|url|max:255',
+            'description' => 'nullable|string',
+            'products_services' => 'nullable|string',
+            'target_audience' => 'nullable|string|max:255',
+            'usp' => 'nullable|string',
+            'business_hours' => 'nullable|string|max:255',
+            'contact_email' => 'nullable|email|max:255',
+            'contact_phone' => 'nullable|string|max:50',
+            'address' => 'nullable|string|max:255',
+            'social_media' => 'nullable|array',
+            'is_default' => 'boolean',
+        ]);
+
+        if ($request->boolean('is_default')) {
+            BusinessProfile::forUser($userId)->where('id', '!=', $businessProfile->id)->update(['is_default' => false]);
+        }
+
+        $validated['is_default'] = $request->boolean('is_default');
+        $businessProfile->update($validated);
+
+        return response()->json(['success' => true, 'message' => 'Profil bisnis berhasil diperbarui.', 'data' => $businessProfile->fresh()]);
+    }
+
+    public function apiDestroy(Request $request, BusinessProfile $businessProfile): JsonResponse
+    {
+        if ($businessProfile->user_id !== $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'You do not own this profile.'], 403);
+        }
+
+        $businessProfile->delete();
+
+        return response()->json(['success' => true, 'message' => 'Profil bisnis berhasil dihapus.']);
+    }
+
     private function authorizeAccess(BusinessProfile $profile): void
     {
         abort_if($profile->user_id !== auth()->id(), 403);

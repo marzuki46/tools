@@ -128,7 +128,7 @@
     <div class="bg-gray-50 border border-gray-200 p-4 rounded-xl">
         <h3 class="font-semibold text-sm text-gray-700">API</h3>
         <p class="text-xs text-gray-500 mt-1">Akses hasil ini via API terpusat:</p>
-        <pre class="bg-white p-3 rounded-lg text-xs font-mono border border-gray-200 mt-2 overflow-x-auto">curl -X POST https://tools.test/api/v1/tool/keyword-research/status \
+        <pre class="bg-white p-3 rounded-lg text-xs font-mono border border-gray-200 mt-2 overflow-x-auto">curl -X POST https://tools.juki.eu.org/api/v1/tool/keyword-research/status \
   -H "X-API-Key: juki_{your_api_key}" \
   -H "Content-Type: application/json" \
   -d '{"id": {{ $research->id }}}'</pre>

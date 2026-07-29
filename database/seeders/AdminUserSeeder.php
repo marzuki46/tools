@@ -11,7 +11,7 @@ class AdminUserSeeder extends Seeder
     public function run(): void
     {
         User::firstOrCreate(
-            ['email' => 'admin@juki-tools.test'],
+            ['email' => 'admin@juki-tools.juki.eu.org'],
             [
                 'name' => 'Admin',
                 'password' => Hash::make('admin123'),
@@ -19,6 +19,6 @@ class AdminUserSeeder extends Seeder
             ]
         );
 
-        $this->command->info('Admin user created: admin@juki-tools.test / admin123');
+        $this->command->info('Admin user created: admin@juki-tools.juki.eu.org / admin123');
     }
 }

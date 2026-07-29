@@ -68,7 +68,7 @@
 #    → 4. Meta Title & Description (otomatis) → 5. Schema Article (otomatis)
 # ==========================================================================
 API_KEY="juki_xxx"
-BASE="https://tools.test/api/v1"
+BASE="https://tools.juki.eu.org/api/v1"
 KEYWORD="strategi digital marketing 2026"
 LOCALE="id"
 TONE="informative"
@@ -180,12 +180,12 @@ echo "  Panjang Fase 1: ${P1_LEN} chars"
 echo "  Panjang Final : ${P3_LEN} chars"
 echo ""
 echo "━━━ DETAIL ARTIKEL ━━━"
-echo "  Buka di browser: https://tools.test/content-generator/$CID"
+echo "  Buka di browser: https://tools.juki.eu.org/content-generator/$CID"
 echo ""
 echo "━━━ SCHEMA MARKUP ━━━"
 echo "  Schema Article otomatis tergenerate (ID terhubung ke content #$CID)."
-echo "  Cek di: https://tools.test/content-generator/$CID ?tab=schema"
-echo "  Atau lihat semua schema: https://tools.test/schema-markup"
+echo "  Cek di: https://tools.juki.eu.org/content-generator/$CID ?tab=schema"
+echo "  Atau lihat semua schema: https://tools.juki.eu.org/schema-markup"
 echo ""
 
 # ── Simpan ke File (opsional) ────────────────────────────────────────
@@ -403,7 +403,7 @@ Response:
 
         <h3 class="font-semibold text-sm mb-2">Menggunakan di Content Generator</h3>
         <p class="text-sm text-gray-600 mb-3">Via Web: Pilih dari dropdown "Profil Bisnis" di form create. Via API: tambahkan field <code class="bg-gray-100 px-1 rounded">business_profile_id</code>.</p>
-        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">curl -X POST https://tools.test/api/v1/tool/content-generator/generate \
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">curl -X POST https://tools.juki.eu.org/api/v1/tool/content-generator/generate \
   -H "X-API-Key: juki_{key}" \
   -H "Content-Type: application/json" \
   -d '{
