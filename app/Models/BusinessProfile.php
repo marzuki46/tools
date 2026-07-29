@@ -15,6 +15,7 @@ class BusinessProfile extends Model
         'products_services',
         'target_audience',
         'usp',
+        'writing_rules',
         'business_hours',
         'contact_email',
         'contact_phone',
@@ -66,6 +67,9 @@ class BusinessProfile extends Model
         }
         if ($this->usp) {
             $parts[] = "Keunggulan: {$this->usp}";
+        }
+        if ($this->writing_rules) {
+            $parts[] = "ATURAN MENULIS (ikuti dengan ketat): {$this->writing_rules}";
         }
         if ($this->contact_email) {
             $parts[] = "Email: {$this->contact_email}";

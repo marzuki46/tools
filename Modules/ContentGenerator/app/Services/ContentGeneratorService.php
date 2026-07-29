@@ -328,13 +328,18 @@ PROMPT;
             sleep($delay);
         }
 
+        $systemPrompt = Setting::getValue('ai.system_prompt');
+        if (!$systemPrompt) {
+            $systemPrompt = 'Anda adalah asisten penulis konten profesional. Selalu gunakan format Markdown untuk struktur artikel.';
+        }
+
         $response = Http::timeout(180)->withHeaders([
             'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
             'Content-Type' => 'application/json',
         ])->post("{$url}/v1/chat/completions", [
             'model' => $model,
             'messages' => [
-                ['role' => 'system', 'content' => 'Anda adalah asisten penulis konten profesional. Selalu gunakan format Markdown untuk struktur artikel.'],
+                ['role' => 'system', 'content' => $systemPrompt],
                 ['role' => 'user', 'content' => $prompt],
             ],
             'temperature' => 0.7,

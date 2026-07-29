@@ -45,4 +45,8 @@ Route::prefix('v1')->middleware(['api-key'])->group(function () {
     Route::post('/business-profiles', [\App\Http\Controllers\BusinessProfileController::class, 'apiStore']);
     Route::put('/business-profiles/{businessProfile}', [\App\Http\Controllers\BusinessProfileController::class, 'apiUpdate']);
     Route::delete('/business-profiles/{businessProfile}', [\App\Http\Controllers\BusinessProfileController::class, 'apiDestroy']);
+
+    // System Prompt (Custom Instructions)
+    Route::get('/system-prompt', [\App\Http\Controllers\Api\SettingController::class, 'getSystemPrompt']);
+    Route::put('/system-prompt', [\App\Http\Controllers\Api\SettingController::class, 'updateSystemPrompt']);
 });
