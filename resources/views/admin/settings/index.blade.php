@@ -54,6 +54,26 @@
                             <p class="text-xs text-gray-400 mt-1 font-mono">{{ $setting['key'] }}</p>
                         </div>
                     @endforeach
+
+                    @if ($group === 'seo-agent')
+                        <hr class="border-gray-200">
+                        <div class="space-y-3">
+                            <form method="POST" action="{{ route('admin.settings.telegram-webhook') }}" class="flex items-center gap-3">
+                                @csrf
+                                <input type="text" name="url" value="{{ url('/api/seo-agent/webhook') }}"
+                                    class="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-lg text-sm font-mono">
+                                <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition shadow-sm">
+                                    Set Webhook
+                                </button>
+                            </form>
+                            <div>
+                                <button type="button" onclick="cekWebhook()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition shadow-sm">
+                                    Cek Status Webhook
+                                </button>
+                                <pre id="webhook-info" class="mt-2 text-xs bg-gray-50 p-3 rounded-lg border hidden overflow-auto max-h-40"></pre>
+                            </div>
+                        </div>
+                    @endif
                 </div>
             </div>
         @endforeach
@@ -65,4 +85,18 @@
         </div>
     </form>
 </div>
+
+@push('scripts')
+<script>
+function cekWebhook() {
+    const pre = document.getElementById('webhook-info');
+    pre.classList.remove('hidden');
+    pre.textContent = 'Loading...';
+    fetch('{{ route("admin.settings.telegram-webhook-info") }}')
+        .then(r => r.json())
+        .then(d => { pre.textContent = JSON.stringify(d, null, 2); })
+        .catch(e => { pre.textContent = 'Error: ' + e.message; });
+}
+</script>
+@endpush
 @endsection

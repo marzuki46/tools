@@ -4,13 +4,17 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Services\TelegramService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class SettingController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        protected TelegramService $telegram,
+    ) {
         abort_unless(Auth::user()->is_admin, 403, 'Admin access required.');
     }
 
@@ -31,5 +35,24 @@ class SettingController extends Controller
 
         return redirect()->route('admin.settings')
             ->with('success', 'Settings updated successfully.');
+    }
+
+    public function setTelegramWebhook(Request $request): RedirectResponse
+    {
+        $url = $request->input('url', url('/api/seo-agent/webhook'));
+        $result = $this->telegram->setWebhook($url);
+
+        if ($result['success']) {
+            return redirect()->route('admin.settings')
+                ->with('success', 'Webhook Telegram berhasil diset.');
+        }
+
+        return redirect()->route('admin.settings')
+            ->with('error', 'Gagal set webhook: ' . ($result['message'] ?? 'unknown error'));
+    }
+
+    public function telegramWebhookInfo(): JsonResponse
+    {
+        return response()->json($this->telegram->getWebhookInfo());
     }
 }

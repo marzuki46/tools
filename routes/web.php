@@ -91,6 +91,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/api-guide', [AdminApiGuideController::class, 'index'])->name('api-guide');
         Route::get('/settings', [AdminSettingController::class, 'index'])->name('settings');
         Route::post('/settings', [AdminSettingController::class, 'update'])->name('settings.update');
+        Route::post('/settings/telegram-webhook', [AdminSettingController::class, 'setTelegramWebhook'])->name('settings.telegram-webhook');
+        Route::get('/settings/telegram-webhook-info', [AdminSettingController::class, 'telegramWebhookInfo'])->name('settings.telegram-webhook-info');
 
         Route::get('/tools', [ToolController::class, 'adminIndex'])->name('tools');
         Route::post('/tools/{tool}/toggle-active', [ToolController::class, 'adminToggleActive'])->name('tools.toggle-active');
