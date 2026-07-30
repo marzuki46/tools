@@ -14,8 +14,6 @@ use Illuminate\Support\Facades\Log;
 
 class SeoAgentController extends Controller
 {
-    protected array $asyncCommands = ['TREND', 'RESEARCH', 'GENERATE_CONTENT', 'PUBLISH'];
-
     public function __construct(
         protected TelegramService $telegram,
         protected SeoAgentOrchestrator $orchestrator,
@@ -53,21 +51,22 @@ class SeoAgentController extends Controller
         }
 
         $parsed = $this->parser->parse($text);
-        $isAsync = $parsed && in_array($parsed['type'], $this->asyncCommands);
+        $chatIdStr = (string) $chatId;
 
-        if ($isAsync) {
-            \App\Jobs\SeoAgentProcessCommandJob::dispatch((string) $chatId, $text, $name);
-            $this->telegram->send((string) $chatId, "⏳ Perintah diterima! Sedang diproses...");
-            return response()->json(['ok' => true]);
+        // Kirim ack biar user tau perintah diterima
+        if ($parsed && $parsed['type'] !== 'HELP') {
+            $this->telegram->send($chatIdStr, "⏳ Perintah diterima! Sedang diproses...");
         }
 
+        // Proses synchronous — queue worker bisa diaktifkan nanti
+        // dengan memasukkan command ke $asyncCommands & setup cron.
         try {
-            $this->orchestrator->handle((string) $chatId, $text, $name);
+            $this->orchestrator->handle($chatIdStr, $text, $name);
         } catch (\Throwable $e) {
             Log::error('SeoAgent: sync command failed', [
                 'chat_id' => $chatId, 'text' => $text, 'error' => $e->getMessage(),
             ]);
-            $this->telegram->send((string) $chatId, "Maaf, terjadi kesalahan: " . $e->getMessage());
+            $this->telegram->send($chatIdStr, "Maaf, terjadi kesalahan: " . $e->getMessage());
         }
 
         return response()->json(['ok' => true]);
