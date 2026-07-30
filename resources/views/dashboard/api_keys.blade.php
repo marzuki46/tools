@@ -81,6 +81,8 @@
                             <td class="px-6 py-4 text-gray-500">{{ $key->expires_at ? $key->expires_at->format('M d, Y') : 'Never' }}</td>
                             <td class="px-6 py-4">
                                 <div class="flex items-center space-x-2">
+                                    <button onclick="showDetail({{ $key->id }})"
+                                        class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Detail</button>
                                     <button onclick="openEditModal({{ $key->id }}, '{{ $key->name }}', {{ $key->max_sites ?? 'null' }})"
                                         class="text-indigo-600 hover:text-indigo-800 text-xs font-medium">Edit</button>
                                     @if ($key->is_active)
@@ -143,6 +145,57 @@
     </div>
 </div>
 
+{{-- Detail Key Modal --}}
+<div id="detailKeyModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-6">
+            <div>
+                <h2 class="text-xl font-bold" id="detail-name"></h2>
+                <p class="text-gray-500 text-sm" id="detail-email">{{ auth()->user()->email }}</p>
+            </div>
+            <button type="button" onclick="document.getElementById('detailKeyModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="p-3 bg-gray-50 rounded-lg">
+                <div class="text-xs text-gray-500 mb-1">Status</div>
+                <div id="detail-status" class="font-semibold"></div>
+            </div>
+            <div class="p-3 bg-gray-50 rounded-lg">
+                <div class="text-xs text-gray-500 mb-1">Expires</div>
+                <div id="detail-expires" class="font-semibold"></div>
+            </div>
+            <div class="p-3 bg-gray-50 rounded-lg">
+                <div class="text-xs text-gray-500 mb-1">Total Token Usage</div>
+                <div id="detail-tokens" class="font-semibold"></div>
+            </div>
+            <div class="p-3 bg-gray-50 rounded-lg">
+                <div class="text-xs text-gray-500 mb-1">Max Sites</div>
+                <div id="detail-max-sites" class="font-semibold"></div>
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <div class="flex items-center justify-between">
+                <label class="text-sm font-medium text-gray-700">API Key</label>
+                <div class="flex items-center space-x-2">
+                    <button onclick="dToggleKey()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Show/Hide</button>
+                    <button onclick="dCopyKey()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Copy</button>
+                </div>
+            </div>
+            <code id="detail-key" class="block mt-1 p-2 bg-gray-50 border rounded text-xs font-mono break-all select-all">•••••••••••••••••••••••••••••</code>
+        </div>
+
+        <div class="mb-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-sm font-semibold text-gray-700">Websites</h3>
+                <span id="detail-websites-count" class="text-xs text-gray-400"></span>
+            </div>
+            <div id="detail-websites" class="mt-2 space-y-2"></div>
+        </div>
+    </div>
+</div>
+
 {{-- Edit Key Modal --}}
 <div id="editKeyModal" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 hidden">
     <div class="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md mx-4">
@@ -172,6 +225,7 @@
 @push('scripts')
 <script>
 let keyCache = {};
+let detailKeyCache = null;
 
 function openEditModal(id, name, maxSites) {
     document.getElementById('editKeyForm').action = '{{ url('api-keys') }}/' + id;
@@ -183,7 +237,10 @@ function openEditModal(id, name, maxSites) {
 function fetchKey(id) {
     if (keyCache[id]) return Promise.resolve(keyCache[id]);
     return fetch('{{ url('api-keys') }}/' + id + '/key')
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) throw new Error('Server error. Try again after git pull.');
+            return r.json();
+        })
         .then(data => {
             if (data.success) {
                 keyCache[id] = data.key;
@@ -221,6 +278,85 @@ function copyKey(id) {
             alert('API key copied to clipboard!');
         });
     }).catch(err => alert(err.message));
+}
+
+// ── Detail Modal ──
+
+function showDetail(id) {
+    var modal = document.getElementById('detailKeyModal');
+    modal.classList.remove('hidden');
+    detailKeyCache = null;
+    document.getElementById('detail-key').textContent = '•••••••••••••••••••••••••••••';
+    document.getElementById('detail-name').textContent = 'Loading...';
+    document.getElementById('detail-websites').innerHTML = '<div class="text-gray-400 text-sm py-4 text-center">Loading...</div>';
+
+    fetch('{{ url('api-keys') }}/' + id + '/detail')
+        .then(function (r) {
+            if (!r.ok) throw new Error('Server error. Run git pull on the server.');
+            return r.json();
+        })
+        .then(function (resp) {
+            if (!resp.success) throw new Error(resp.message || 'Failed to load.');
+            var d = resp.data;
+            detailKeyCache = d.key;
+            document.getElementById('detail-name').textContent = d.name + ' (' + d.status + ')';
+            document.getElementById('detail-key').textContent = d.key;
+            document.getElementById('detail-status').innerHTML = '<span class="px-2 py-0.5 rounded-full text-xs font-medium ' + (d.is_active ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50') + '">' + d.status.charAt(0).toUpperCase() + d.status.slice(1) + '</span>';
+            document.getElementById('detail-expires').textContent = d.expires_at || 'Never';
+            document.getElementById('detail-tokens').textContent = (d.total_tokens || 0).toLocaleString() + ' (' + (d.total_tokens_in || 0).toLocaleString() + ' in / ' + (d.total_tokens_out || 0).toLocaleString() + ' out)';
+            document.getElementById('detail-max-sites').textContent = d.max_sites || 'Unlimited';
+            document.getElementById('detail-websites-count').textContent = (d.websites ? d.websites.length : 0) + ' sites';
+
+            var html = '';
+            (d.websites || []).forEach(function (w) {
+                var statusClass = w.is_active ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50';
+                var statusText = w.is_active ? 'Active' : 'Blocked';
+                html += '<div class="p-3 border rounded-lg">';
+                html += '<div class="flex items-center justify-between">';
+                html += '<div><div class="font-medium text-sm">' + escHtml(w.domain) + '</div>';
+                html += '<div class="text-xs text-gray-400">IP: ' + escHtml(w.last_ip || '-') + ' &middot; Last used: ' + (w.last_used_at || 'Never') + '</div></div>';
+                html += '<span class="px-2 py-0.5 rounded-full text-xs font-medium ' + statusClass + '">' + statusText + '</span>';
+                html += '</div>';
+                html += '<div class="mt-2 grid grid-cols-3 gap-2 text-xs">';
+                html += '<div><span class="text-gray-500">Tokens:</span> ' + (w.tokens_total || 0).toLocaleString() + '</div>';
+                html += '<div><span class="text-gray-500">Content:</span> ' + (w.content_generations || 0) + '</div>';
+                html += '<div><span class="text-gray-500">Keywords:</span> ' + (w.keyword_researches || 0) + '</div>';
+                html += '</div></div>';
+            });
+            if (!d.websites || !d.websites.length) {
+                html = '<div class="text-gray-400 text-sm py-4 text-center">No websites registered yet.</div>';
+            }
+            document.getElementById('detail-websites').innerHTML = html;
+        })
+        .catch(function (err) {
+            document.getElementById('detail-name').textContent = 'Error';
+            document.getElementById('detail-websites').innerHTML = '<div class="text-red-500 text-sm py-4 text-center">' + err.message + '</div>';
+        });
+}
+
+function dToggleKey() {
+    var el = document.getElementById('detail-key');
+    if (detailKeyCache && el.textContent === detailKeyCache) {
+        el.textContent = '•••••••••••••••••••••••••••••';
+    } else if (detailKeyCache) {
+        el.textContent = detailKeyCache;
+    }
+}
+
+function dCopyKey() {
+    if (detailKeyCache) {
+        navigator.clipboard.writeText(detailKeyCache).then(function () {
+            alert('API key copied to clipboard!');
+        });
+    } else {
+        alert('Key not loaded yet.');
+    }
+}
+
+function escHtml(str) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
 }
 </script>
 @endpush

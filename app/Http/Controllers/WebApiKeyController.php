@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ApiKey;
+use App\Models\ApiKeyWebsite;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -79,13 +80,16 @@ class WebApiKeyController extends Controller
         return redirect()->route('api-keys.index')->with('success', 'API key reactivated.');
     }
 
-    public function showKey(ApiKey $apiKey)
+    private function authorizeAccess(ApiKey $apiKey): void
     {
         $user = Auth::user();
-
-        $isAdmin = $user->hasRole('admin') ?? $user->is_admin ?? false;
-
+        $isAdmin = $user->is_admin ?? false;
         abort_if($apiKey->user_id !== $user->id && !$isAdmin, 403);
+    }
+
+    public function showKey(ApiKey $apiKey)
+    {
+        $this->authorizeAccess($apiKey);
 
         $plain = $apiKey->getDecryptedKey();
 
@@ -102,9 +106,57 @@ class WebApiKeyController extends Controller
         ]);
     }
 
+    public function showDetail(ApiKey $apiKey)
+    {
+        $this->authorizeAccess($apiKey);
+
+        $plain = $apiKey->getDecryptedKey();
+        $websites = $apiKey->websites()->orderBy('last_used_at', 'desc')->get();
+
+        $websiteData = $websites->map(function ($site) {
+            $contentGens = \Modules\ContentGenerator\Models\ContentGeneration::where('api_key_website_id', $site->id)->count();
+            $keywordResearches = \Modules\KeywordResearch\Models\KeywordResearch::where('api_key_website_id', $site->id)->count();
+
+            return [
+                'id' => $site->id,
+                'domain' => $site->domain,
+                'is_active' => $site->is_active,
+                'last_used_at' => $site->last_used_at?->diffForHumans(),
+                'last_ip' => $site->last_ip,
+                'tokens_in' => (int) $site->tokens_in,
+                'tokens_out' => (int) $site->tokens_out,
+                'tokens_total' => (int) $site->tokens_total,
+                'content_generations' => $contentGens,
+                'keyword_researches' => $keywordResearches,
+            ];
+        });
+
+        $totalTokensIn = $websites->sum('tokens_in');
+        $totalTokensOut = $websites->sum('tokens_out');
+        $totalTokens = $websites->sum('tokens_total');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $apiKey->id,
+                'name' => $apiKey->name,
+                'key' => $plain,
+                'is_active' => $apiKey->is_active,
+                'status' => $apiKey->status,
+                'expires_at' => $apiKey->expires_at?->format('M d, Y'),
+                'max_sites' => $apiKey->max_sites,
+                'last_used_at' => $apiKey->last_used_at?->diffForHumans(),
+                'websites' => $websiteData,
+                'total_tokens_in' => (int) $totalTokensIn,
+                'total_tokens_out' => (int) $totalTokensOut,
+                'total_tokens' => (int) $totalTokens,
+            ],
+        ]);
+    }
+
     public function websites(ApiKey $apiKey)
     {
-        abort_if($apiKey->user_id !== Auth::id(), 403);
+        $this->authorizeAccess($apiKey);
 
         $websites = $apiKey->websites()
             ->orderBy('last_used_at', 'desc')
@@ -115,7 +167,7 @@ class WebApiKeyController extends Controller
 
     public function toggleWebsite(ApiKey $apiKey, Request $request)
     {
-        abort_if($apiKey->user_id !== Auth::id(), 403);
+        $this->authorizeAccess($apiKey);
 
         $validated = $request->validate([
             'domain' => 'required|string',
