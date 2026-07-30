@@ -94,27 +94,67 @@ class SeoAgentOrchestrator
         $analysis = $this->trends->analyze($keyword);
 
         $lines = [];
-        $lines[] = "📊 *TREND: {$keyword}*";
-        $lines[] = "";
-        $lines[] = "Arah: {$analysis['trend_direction']} (skor: {$analysis['trend_score']}/100)";
+        $lines[] = "📊 *TREN GOOGLE: {$keyword}*";
         $lines[] = "";
         $lines[] = $analysis['summary'];
 
+        // Timeline (interest over time)
+        if (!empty($analysis['interest_over_time'])) {
+            $lines[] = "";
+            $lines[] = "📈 *GRAFIK MINAT (12 BULAN)*";
+            $maxVal = max(array_column($analysis['interest_over_time'], 'value'));
+            foreach (array_slice($analysis['interest_over_time'], -12) as $point) {
+                $bar = str_repeat('▬', max(1, (int) ($point['value'] / max(1, $maxVal / 20))));
+                $pct = $point['value'];
+                $lines[] = "{$point['time']} {$bar} {$pct}";
+            }
+        }
+
+        // Top terkait
         if (!empty($analysis['related_topics'])) {
             $lines[] = "";
-            $lines[] = "Topik terkait:";
-            foreach (array_slice($analysis['related_topics'], 0, 5) as $t) {
+            $lines[] = "🔗 *TOP TOPIK TERKAIT*";
+            foreach ($analysis['related_topics'] as $t) {
                 $lines[] = "• {$t}";
             }
         }
 
-        if (!empty($analysis['related_questions'])) {
+        // Rising queries
+        if (!empty($analysis['rising_queries'])) {
             $lines[] = "";
-            $lines[] = "Pertanyaan terkait:";
-            foreach (array_slice($analysis['related_questions'], 0, 3) as $q) {
+            $lines[] = "📈 *KUERI YANG NAIK*";
+            foreach ($analysis['rising_queries'] as $q) {
                 $lines[] = "• {$q}";
             }
         }
+
+        // Wilayah
+        if (!empty($analysis['regions'])) {
+            $lines[] = "";
+            $lines[] = "📍 *WILAYAH POPULER*";
+            foreach ($analysis['regions'] as $r) {
+                $region = is_string($r) ? $r : ($r['region'] ?? '');
+                $val = is_array($r) ? ($r['value'] ?? 0) : 0;
+                if ($val) {
+                    $lines[] = "• {$region} ({$val}/100)";
+                } else {
+                    $lines[] = "• {$region}";
+                }
+            }
+        }
+
+        // Prediksi
+        if (!empty($analysis['prediction'])) {
+            $lines[] = "";
+            $lines[] = "🔮 *PREDIKSI*";
+            $lines[] = $analysis['prediction'];
+        }
+
+        // Link Google Trends
+        $encoded = urlencode($keyword);
+        $lines[] = "";
+        $lines[] = "🔗 *Lihat selengkapnya:*";
+        $lines[] = "https://trends.google.com/trends/explore?q={$encoded}&date=today%201-y&geo=ID";
 
         return implode("\n", $lines);
     }
