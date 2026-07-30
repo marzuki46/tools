@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Log;
 
 class SeoAgentController extends Controller
 {
+    protected array $asyncCommands = ['TREND', 'RESEARCH', 'GENERATE_CONTENT', 'PUBLISH'];
+
     public function __construct(
         protected TelegramService $telegram,
         protected SeoAgentOrchestrator $orchestrator,
@@ -53,20 +55,33 @@ class SeoAgentController extends Controller
         $parsed = $this->parser->parse($text);
         $chatIdStr = (string) $chatId;
 
-        // Kirim ack biar user tau perintah diterima
-        if ($parsed && $parsed['type'] !== 'HELP') {
-            $this->telegram->send($chatIdStr, "⏳ Perintah diterima! Sedang diproses...");
+        if (!$parsed) {
+            $this->telegram->send($chatIdStr, "Maaf, perintah tidak dikenali. Ketik *bantuan* untuk daftar perintah.");
+            return response()->json(['ok' => true]);
         }
 
-        // Proses synchronous — queue worker bisa diaktifkan nanti
-        // dengan memasukkan command ke $asyncCommands & setup cron.
-        try {
+        // QUEUE, STOP_QUEUE, HELP: proses sync
+        if (in_array($parsed['type'], ['QUEUE', 'STOP_QUEUE', 'HELP'])) {
             $this->orchestrator->handle($chatIdStr, $text, $name);
-        } catch (\Throwable $e) {
-            Log::error('SeoAgent: sync command failed', [
-                'chat_id' => $chatId, 'text' => $text, 'error' => $e->getMessage(),
-            ]);
-            $this->telegram->send($chatIdStr, "Maaf, terjadi kesalahan: " . $e->getMessage());
+            return response()->json(['ok' => true]);
+        }
+
+        // Heavy commands: cek apakah worker aktif
+        $queueActive = Setting::getValue('seo-agent.queue_active', false);
+
+        if ($queueActive && in_array($parsed['type'], $this->asyncCommands)) {
+            $this->telegram->send($chatIdStr, "⏳ Perintah diterima! Sedang diproses via queue worker...");
+            \App\Jobs\SeoAgentProcessCommandJob::dispatch($chatIdStr, $text, $name);
+        } else {
+            $this->telegram->send($chatIdStr, "⏳ Perintah diterima! Sedang diproses...");
+            try {
+                $this->orchestrator->handle($chatIdStr, $text, $name);
+            } catch (\Throwable $e) {
+                Log::error('SeoAgent: sync command failed', [
+                    'chat_id' => $chatId, 'text' => $text, 'error' => $e->getMessage(),
+                ]);
+                $this->telegram->send($chatIdStr, "Maaf, terjadi kesalahan: " . $e->getMessage());
+            }
         }
 
         return response()->json(['ok' => true]);

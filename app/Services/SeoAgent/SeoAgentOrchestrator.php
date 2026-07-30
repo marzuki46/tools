@@ -47,6 +47,7 @@ class SeoAgentOrchestrator
                     'READABILITY' => $this->handleReadability($parsed),
                     'PUBLISH' => $this->handlePublish($parsed),
                     'QUEUE' => $this->handleQueue(),
+                    'STOP_QUEUE' => $this->handleStopQueue(),
                     'HELP' => $this->helpMessage(),
                     default => $this->unknownCommand(),
                 };
@@ -452,22 +453,53 @@ class SeoAgentOrchestrator
 
         if (function_exists('exec')) {
             try {
-                $cmd = 'cd ' . escapeshellarg($basePath) . ' && nohup ea-php84 artisan queue:work --stop-when-empty --timeout=240 --tries=3 --queue=default,keyword-research,content-generator > /dev/null 2>&1 &';
+                $cmd = 'cd ' . escapeshellarg($basePath) . ' && nohup ea-php84 artisan queue:work --stop-when-empty --timeout=240 --tries=3 --queue=default,keyword-research,content-generator > /dev/null 2>&1 & echo $!';
+                $output = [];
                 exec($cmd, $output, $exitCode);
-                if ($exitCode === 0) {
+                if ($exitCode === 0 && !empty($output)) {
+                    Setting::setValue('seo-agent.queue_active', '1');
                     $lines[] = "";
                     $lines[] = "🚀 Worker dijalankan! Memproses {$pendingJobs} antrian...";
+                    $lines[] = "Sekarang perintah `trend`, `riset`, `konten` akan diproses via queue.";
                 } else {
+                    Setting::setValue('seo-agent.queue_active', '0');
                     $lines[] = "";
                     $lines[] = "⚠️ Gagal menjalankan worker otomatis (exit code {$exitCode}).";
+                    $lines[] = "Jalankan manual via SSH:";
+                    $lines[] = "`cd {$basePath}; ea-php84 artisan queue:work --timeout=240 --tries=3`";
                 }
             } catch (\Throwable $e) {
+                Setting::setValue('seo-agent.queue_active', '0');
                 $lines[] = "";
                 $lines[] = "⚠️ Tidak bisa jalankan worker dari sini. Jalankan via SSH ya.";
             }
         } else {
             $lines[] = "";
-            $lines[] = "⚠️ `exec()` tidak aktif di server ini. Jalankan worker via SSH.";
+            $lines[] = "⚠️ `exec()` tidak aktif di server ini.";
+            $lines[] = "Jalankan worker via SSH:";
+            $lines[] = "`cd {$basePath}; ea-php84 artisan queue:work --timeout=240 --tries=3`";
+        }
+
+        return implode("\n", $lines);
+    }
+
+    protected function handleStopQueue(): string
+    {
+        Setting::setValue('seo-agent.queue_active', '0');
+
+        $lines = [];
+        $lines[] = "⏹ *QUEUE WORKER DINONAKTIFKAN*";
+        $lines[] = "";
+        $lines[] = "Sekarang perintah `trend`, `riset`, `konten` akan diproses langsung (sync).";
+
+        if (function_exists('exec')) {
+            try {
+                $cmd = 'pkill -f "artisan queue:work" 2>/dev/null; echo done';
+                exec($cmd);
+                $lines[] = "Proses worker dihentikan.";
+            } catch (\Throwable $e) {
+                $lines[] = "Worker mungkin masih jalan. Hentikan manual via SSH.";
+            }
         }
 
         return implode("\n", $lines);
@@ -482,7 +514,7 @@ class SeoAgentOrchestrator
             . "✅ *Cek*\n`cek <keyword>` — Cek status keyword\n`status <id>` — Cek progress konten\n\n"
             . "📏 *Kualitas*\n`panjang <id>` — Cek panjang konten\n`readability <id>` — Cek readability\n\n"
             . "📤 *Publish*\n`publish <id>` — Publish ke WordPress\n\n"
-            . "⚙️ *Worker*\n`queue` / `hidupkan worker` — Cek & jalankan antrian\n\n"
+            . "⚙️ *Worker*\n`queue` / `hidupkan worker` — Cek & jalankan antrian\n`matikan worker` — Hentikan worker\n\n"
             . "💡 *Tips:*\n• Semua perintah bisa pakai bahasa Indonesia\n• Hasil riset & konten dikirim otomatis ke Telegram";
     }
 

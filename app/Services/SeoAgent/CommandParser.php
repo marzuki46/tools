@@ -90,6 +90,9 @@ class CommandParser
         if (preg_match('/^queue(?:\s+status)?$/i', $text)) {
             return ['type' => 'QUEUE'];
         }
+        if (preg_match('/(?:matikan|stop|nonaktifkan)\s+(?:worker|queue|antrian)/i', $text)) {
+            return ['type' => 'STOP_QUEUE'];
+        }
 
         return null;
     }
