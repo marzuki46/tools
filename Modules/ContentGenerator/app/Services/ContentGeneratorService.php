@@ -330,9 +330,9 @@ PROMPT;
             sleep($delay);
         }
 
-        $systemPrompt = Setting::getValue('ai.system_prompt');
-        if (!$systemPrompt) {
-            $systemPrompt = 'Anda adalah asisten penulis konten profesional. Selalu gunakan format Markdown untuk struktur artikel.';
+        $customInstructions = Setting::getValue('ai.system_prompt');
+        if ($customInstructions) {
+            $prompt .= "\n\n---\nINSTRUKSI KUSTOM:\n{$customInstructions}";
         }
 
         $response = Http::timeout(180)->withHeaders([
@@ -341,7 +341,7 @@ PROMPT;
         ])->post("{$url}/v1/chat/completions", [
             'model' => $model,
             'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'system', 'content' => 'Anda adalah asisten penulis konten profesional. Selalu gunakan format Markdown untuk struktur artikel.'],
                 ['role' => 'user', 'content' => $prompt],
             ],
             'temperature' => 0.7,
