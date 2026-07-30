@@ -18,7 +18,7 @@
     @if (session('plain_text_key'))
         <div class="p-4 bg-amber-50 border border-amber-200 rounded-lg" id="new-key-notice">
             <p class="text-sm font-medium text-amber-800 mb-1">API Key Created!</p>
-            <p class="text-xs text-amber-600 mb-2">Copy this key now. You won't be able to see it again.</p>
+            <p class="text-xs text-amber-600 mb-2">Simpan key ini — bisa kamu lihat lagi kapan saja di dashboard.</p>
             <div class="flex items-center space-x-2">
                 <code class="flex-1 p-2 bg-white border border-amber-300 rounded text-sm font-mono break-all">{{ session('plain_text_key') }}</code>
                 <button onclick="navigator.clipboard.writeText('{{ session('plain_text_key') }}');this.textContent='Copied!'"
@@ -51,8 +51,14 @@
                             <td class="px-6 py-4 text-gray-500 text-xs">{{ auth()->user()->email }}</td>
                             <td class="px-6 py-4">
                                 <div class="flex items-center space-x-2">
-                                    <code class="text-xs font-mono text-gray-500 break-all max-w-[200px] inline-block">{{ $key->key_prefix }}</code>
-                                    <button onclick="copyKey({{ $key->key_prefix ? json_encode($key->key_prefix) : 'null' }})" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium whitespace-nowrap">Copy</button>
+                                    @if ($key->key_prefix)
+                                        <code class="text-xs font-mono text-gray-500 break-all max-w-[250px] inline-block">{{ $key->key_prefix }}</code>
+                                        <button onclick="navigator.clipboard.writeText(this.parentNode.querySelector('code').textContent);this.textContent='Copied!'"
+                                            class="text-indigo-600 hover:text-indigo-800 text-xs font-medium whitespace-nowrap">Copy</button>
+                                    @else
+                                        <span class="text-xs text-gray-400">—</span>
+                                        <span class="text-xs text-amber-600">Regenerate required</span>
+                                    @endif
                                 </div>
                             </td>
                             <td class="px-6 py-4">
@@ -219,13 +225,6 @@ function openEditModal(id, name, maxSites) {
     document.getElementById('edit_name').value = name;
     document.getElementById('edit_max_sites').value = maxSites || '';
     document.getElementById('editKeyModal').classList.remove('hidden');
-}
-
-function copyKey(key) {
-    if (!key) { alert('Key not available.'); return; }
-    navigator.clipboard.writeText(key).then(function () {
-        alert('API key copied to clipboard!');
-    });
 }
 
 // ── Detail Modal ──

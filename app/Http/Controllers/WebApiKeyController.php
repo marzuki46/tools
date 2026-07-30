@@ -121,7 +121,7 @@ class WebApiKeyController extends Controller
             'data' => [
                 'id' => $apiKey->id,
                 'name' => $apiKey->name,
-                'key' => $plain,
+                'key' => $plain ?? '— (regenerate required)',
                 'is_active' => $apiKey->is_active,
                 'status' => $apiKey->status,
                 'expires_at' => $apiKey->expires_at?->format('M d, Y'),

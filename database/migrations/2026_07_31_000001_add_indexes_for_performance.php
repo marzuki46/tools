@@ -17,16 +17,16 @@ return new class extends Migration
 
         DB::statement('ALTER TABLE api_keys MODIFY key_prefix TEXT NULL');
 
-        // Backfill existing keys: decrypt key_encrypted into key_prefix
+        // Backfill: decrypt key_encrypted → key_prefix if missing/short
         $keys = DB::table('api_keys')->whereNotNull('key_encrypted')->where(function ($q) {
-            $q->whereNull('key_prefix')->orWhere(DB::raw('LENGTH(key_prefix)'), '<', 45);
+            $q->whereNull('key_prefix')->orWhere(DB::raw('LENGTH(key_prefix)'), '<', 20);
         })->get();
         foreach ($keys as $k) {
             try {
                 $plain = \Illuminate\Support\Facades\Crypt::decryptString($k->key_encrypted);
                 DB::table('api_keys')->where('id', $k->id)->update(['key_prefix' => $plain]);
             } catch (\Exception) {
-                // cannot decrypt, skip
+                // APP_KEY mismatch — keep existing prefix (may be truncated)
             }
         }
 
