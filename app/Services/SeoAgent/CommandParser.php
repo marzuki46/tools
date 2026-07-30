@@ -7,12 +7,18 @@ class CommandParser
     protected function cleanKeyword(string $kw): string
     {
         $kw = trim($kw);
+        // Ambil keyword setelah "dengan keyword" atau "keyword"
+        if (preg_match('/dengan\s+keyword\s+(.+)$/i', $kw, $m)) {
+            $kw = $m[1];
+        }
+        // Buang "dan di posting ke website ..." sebelum keyword
+        $kw = preg_replace('/^(?:dan\s+)?(?:di\s+)?(?:posting|publish|upload)\s+ke\s+\S+\s+/i', '', $kw);
         $kw = preg_replace('/[〈〈《]/u', '<', $kw);
         $kw = preg_replace('/[〉〉》]/u', '>', $kw);
         $kw = preg_replace('/<[^>]+>/', '', $kw);
         $kw = preg_replace('/\s*[—–-]\s*(?:Cek|cek|Lihat|lihat).*$/u', '', $kw);
         $kw = preg_replace('/\s+di\s+indonesia$/i', '', $kw);
-        $kw = preg_replace('/^(?:keyword|topik|tentang)\s+/i', '', $kw);
+        $kw = preg_replace('/^(?:keyword|topik|tentang|konten)\s+/i', '', $kw);
         $kw = preg_replace('/\s*\?+$/', '', $kw);
         return trim($kw);
     }
@@ -50,7 +56,7 @@ class CommandParser
         }
 
         // ── Generate content ──
-        if (preg_match('/^(?:buat|bikin)\s+(?:konten|artikel)\s+(?:dari\s+)?(.+)/i', $text, $m)) {
+        if (preg_match('/^(?:iya\s+)?(?:silahkan|tolong|ya)?\s*buat(?:kan)?\s+(?:konten|artikel)\s+(?:dari\s+)?(.+)/i', $text, $m)) {
             return ['type' => 'GENERATE_CONTENT', 'keyword' => $this->cleanKeyword($m[1])];
         }
         if (preg_match('/^konten(?:kan)?\s+(.+)/i', $text, $m)) {
@@ -99,8 +105,12 @@ class CommandParser
         }
 
         // ── Publish ──
-        if (preg_match('/^publish\s+(\d+)/i', $text, $m)) {
+        if (preg_match('/^(?:publish|posting|upload)\s+(\d+)/i', $text, $m)) {
             return ['type' => 'PUBLISH', 'id' => (int) $m[1]];
+        }
+        // "posting ke website X dengan keyword Y" — abaikan dulu, kita buat konten dulu
+        if (preg_match('/(?:posting|publish|upload)\s+ke\s+\S+\s+dengan\s+keyword\s+(.+)/i', $text, $m)) {
+            return ['type' => 'GENERATE_CONTENT', 'keyword' => $this->cleanKeyword($m[1])];
         }
 
         // ── Queue worker ──
