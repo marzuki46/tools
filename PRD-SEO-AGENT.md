@@ -1,32 +1,31 @@
-# PRD: SEO Agent WhatsApp (Fonnte)
+# PRD: SEO Agent Telegram
 
 ## Ringkasan
-Agent AI yang terhubung dengan **Fonnte** (WhatsApp gateway) untuk melakukan riset keyword,
+Agent AI yang terhubung ke **Telegram Bot** untuk melakukan riset keyword,
 analisis tren, pembuatan konten SEO, pengecekan kualitas, dan publish artikel ke WordPress —
-semua melalui chat WhatsApp.
+semua via chat Telegram.
 
 ## Arsitektur
 
 ```
-User WA → Fonnte → Webhook → SeoAgentController → CommandParser → SeoAgentOrchestrator
-                                                                  ├── KeywordResearchService
-                                                                  ├── ContentGeneratorService
-                                                                  ├── GoogleTrendsService
-                                                                  ├── ContentQualityChecker
-                                                                  └── FonnteService (reply)
+User TG → Bot API → Webhook → SeoAgentController → CommandParser → SeoAgentOrchestrator
+                                                                   ├── KeywordResearchService
+                                                                   ├── ContentGeneratorService
+                                                                   ├── GoogleTrendsService
+                                                                   ├── ContentQualityChecker
+                                                                   └── TelegramService (reply)
 ```
 
 ## Komponen
 
-### 1. FonnteService (`app/Services/FonnteService.php`)
-Gateway WhatsApp via Fonnte API.
+### 1. TelegramService (`app/Services/TelegramService.php`)
+Gateway Telegram Bot API.
 
-**Send message:** `POST https://api.fonnte.com/send`
-- Headers: `Authorization: {token}`
-- Body: `target=phone&message=text&countryCode=62`
+**Send message:** `POST https://api.telegram.org/bot{token}/sendMessage`
+- Body: `chat_id={id}&text={message}&parse_mode=Markdown`
 
-**Webhook incoming:** POST ke `{base_url}/api/seo-agent/webhook`
-- Body: `{"sender": "0812345xxx", "message": "riset keyword...", "name": "User"}`
+**Webhook incoming:** POST dari Telegram ke `{base_url}/api/seo-agent/webhook`
+- Body: `{"update_id": ..., "message": {"chat": {"id": ...}, "text": "...", "from": {"first_name": "..."}}}`
 
 ### 2. CommandParser (`app/Services/SeoAgent/CommandParser.php`)
 Parse natural language chat ke command terstruktur.
@@ -95,12 +94,11 @@ Menyimpan history chat, command, status, response.
 
 ## Environment Variables (di .env)
 ```
-FONNTE_TOKEN=your_fonnte_api_token
-FONNTE_WEBHOOK_SECRET=optional_secret
-SEO_AGENT_ALLOWED_NUMBERS=08123456789,08198765432
+TELEGRAM_BOT_TOKEN=your_bot_token_from_botfather
+SEO_AGENT_ALLOWED_USERS=123456789,987654321
 ```
 
-Atau via Settings DB.
+Atau via Settings DB → Admin → Settings → SEO Agent (WhatsApp).
 
 ## Command Format Detail
 
@@ -166,11 +164,11 @@ Cek status antrian + jalankan worker:
 Balas: daftar perintah yang didukung
 
 ## Catatan
-- Panjang pesan WA maksimal 1500 karakter
-- Owner number di-set via Settings DB
+- Panjang pesan Telegram maksimal 4000 karakter
+- Chat ID yang diizinkan di-set via Settings DB
 - Semua log disimpan di tabel `seo_agent_logs`
-- Webhook endpoint public (no auth) — validasi via sender number + optional secret
-- Rate limit per sender: 10 requests/menit
+- Webhook endpoint public (no auth) — validasi via chat ID
+- Rate limit per user: 10 requests/menit
 
 ## Server Path
 - Project: `/home/belalangturbo/public_html/tools.juki.eu.org/`

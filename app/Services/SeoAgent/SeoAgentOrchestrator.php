@@ -4,7 +4,7 @@ namespace App\Services\SeoAgent;
 
 use App\Models\SeoAgentLog;
 use App\Models\Setting;
-use App\Services\FonnteService;
+use App\Services\TelegramService;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -14,18 +14,18 @@ use Modules\KeywordResearch\Models\KeywordResearch;
 class SeoAgentOrchestrator
 {
     public function __construct(
-        protected FonnteService $fonnte,
+        protected TelegramService $telegram,
         protected CommandParser $parser,
         protected GoogleTrendsService $trends,
         protected ContentQualityChecker $quality,
     ) {}
 
-    public function handle(string $sender, string $message, string $name = ''): array
+    public function handle(string $chatId, string $message, string $name = ''): array
     {
         $parsed = $this->parser->parse($message);
 
         $log = SeoAgentLog::create([
-            'sender' => $sender,
+            'sender' => $chatId,
             'sender_name' => $name,
             'message' => $message,
             'command_type' => $parsed['type'] ?? 'UNKNOWN',
@@ -38,9 +38,9 @@ class SeoAgentOrchestrator
                 $reply = $this->unknownCommand();
             } else {
                 $reply = match ($parsed['type']) {
-                    'TREND' => $this->handleTrend($parsed, $sender),
-                    'RESEARCH' => $this->handleResearch($parsed, $sender, $log),
-                    'GENERATE_CONTENT' => $this->handleGenerateContent($parsed, $sender, $log),
+                    'TREND' => $this->handleTrend($parsed, $chatId),
+                    'RESEARCH' => $this->handleResearch($parsed, $chatId, $log),
+                    'GENERATE_CONTENT' => $this->handleGenerateContent($parsed, $chatId, $log),
                     'CHECK_KEYWORD' => $this->handleCheckKeyword($parsed),
                     'STATUS' => $this->handleStatus($parsed),
                     'CONTENT_LENGTH' => $this->handleContentLength($parsed),
@@ -58,10 +58,10 @@ class SeoAgentOrchestrator
                 'processed_at' => now(),
             ]);
 
-            $sendResult = $this->fonnte->send($sender, $reply);
+            $sendResult = $this->telegram->send($chatId, $reply);
             if (!$sendResult['success']) {
                 Log::warning('SeoAgent: failed to send reply', [
-                    'sender' => $sender,
+                    'chat_id' => $chatId,
                     'error' => $sendResult['message'],
                 ]);
             }
@@ -69,7 +69,7 @@ class SeoAgentOrchestrator
             return ['success' => true, 'reply' => $reply];
         } catch (Exception $e) {
             Log::error('SeoAgent: orchestrator error', [
-                'sender' => $sender,
+                'chat_id' => $chatId,
                 'message' => $message,
                 'error' => $e->getMessage(),
             ]);
@@ -81,7 +81,7 @@ class SeoAgentOrchestrator
             ]);
 
             $errorReply = "Maaf, terjadi kesalahan: " . $e->getMessage();
-            $this->fonnte->send($sender, $errorReply);
+            $this->telegram->send($chatId, $errorReply);
 
             return ['success' => false, 'error' => $e->getMessage()];
         }
@@ -156,7 +156,7 @@ class SeoAgentOrchestrator
 
         dispatch(new \App\Jobs\SeoAgentProcessKeywordJob($research, $sender, $log->id));
 
-        return "⏳ Riset untuk '{$keyword}' sedang diantrikan. ID: {$research->id}.\nKami akan kirim hasilnya otomatis ke WA ini ya.";
+        return "⏳ Riset untuk '{$keyword}' sedang diantrikan. ID: {$research->id}.\nHasilnya akan dikirim otomatis ke sini ya.";
     }
 
     protected function handleGenerateContent(array $cmd, string $sender, SeoAgentLog $log): string
@@ -213,7 +213,7 @@ class SeoAgentOrchestrator
 
             dispatch(new \App\Jobs\SeoAgentProcessKeywordJob($research, $sender, $log->id, true));
 
-            return "⏳ Riset keyword '{$keyword}' dulu ya. Proses... Nanti lanjut bikin konten setelah riset selesai. Kami kabari lewat WA.";
+            return "⏳ Riset keyword '{$keyword}' dulu ya. Nanti lanjut bikin konten setelah riset selesai. Kami kabari lewat sini.";
         }
 
         // Create and dispatch content generation
@@ -231,7 +231,7 @@ class SeoAgentOrchestrator
 
         dispatch(new \App\Jobs\SeoAgentProcessContentJob($generation, $sender, $log->id));
 
-        return "⏳ Konten untuk '{$keyword}' sedang dibuat. ID: {$generation->id}.\nKami kirim hasilnya otomatis ke WA ini ya.";
+        return "⏳ Konten untuk '{$keyword}' sedang dibuat. ID: {$generation->id}.\nHasilnya akan dikirim otomatis ke sini ya.";
     }
 
     protected function handleCheckKeyword(array $cmd): string
@@ -482,7 +482,7 @@ class SeoAgentOrchestrator
             . "📏 *Kualitas*\n`panjang <id>` — Cek panjang konten\n`readability <id>` — Cek readability\n\n"
             . "📤 *Publish*\n`publish <id>` — Publish ke WordPress\n\n"
             . "⚙️ *Worker*\n`queue` / `hidupkan worker` — Cek & jalankan antrian\n\n"
-            . "💡 *Tips:*\n• Semua perintah bisa pakai bahasa Indonesia\n• Hasil riset & konten dikirim otomatis ke WA";
+            . "💡 *Tips:*\n• Semua perintah bisa pakai bahasa Indonesia\n• Hasil riset & konten dikirim otomatis ke Telegram";
     }
 
     protected function unknownCommand(): string

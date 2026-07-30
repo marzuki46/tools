@@ -14,13 +14,13 @@ class SeoAgentProcessCommandJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public function __construct(
-        protected string $sender,
+        protected string $chatId,
         protected string $message,
         protected string $name,
     ) {}
 
     public function handle(SeoAgentOrchestrator $orchestrator): void
     {
-        $orchestrator->handle($this->sender, $this->message, $this->name);
+        $orchestrator->handle($this->chatId, $this->message, $this->name);
     }
 }

@@ -29,11 +29,15 @@ Route::middleware('auth:sanctum')->group(function () {
 // Key status check (no auth — works even for suspended/expired keys)
 Route::get('/v1/key-status', [\App\Http\Controllers\Api\ApiKeyController::class, 'checkStatus']);
 
-// SEO Agent webhook (public — Fonnte sends messages here)
+// SEO Agent webhook (public — Telegram sends updates here)
 Route::post('/seo-agent/webhook', [\App\Http\Controllers\Api\SeoAgentController::class, 'webhook']);
 
-// SEO Agent send (protected by Sanctum)
-Route::middleware('auth:sanctum')->post('/seo-agent/send', [\App\Http\Controllers\Api\SeoAgentController::class, 'send']);
+// SEO Agent admin (protected by Sanctum)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/seo-agent/set-webhook', [\App\Http\Controllers\Api\SeoAgentController::class, 'setWebhook']);
+    Route::get('/seo-agent/webhook-info', [\App\Http\Controllers\Api\SeoAgentController::class, 'webhookInfo']);
+    Route::post('/seo-agent/send', [\App\Http\Controllers\Api\SeoAgentController::class, 'send']);
+});
 
 // External API routes (via API Key middleware)
 Route::prefix('v1')->middleware(['api-key'])->group(function () {

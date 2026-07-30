@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Setting;
-use App\Services\FonnteService;
+use App\Services\TelegramService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -19,7 +19,7 @@ class SeoAgentProcessContentFromResearchJob implements ShouldQueue
 
     public function __construct(
         protected KeywordResearch $research,
-        protected string $sender,
+        protected string $chatId,
         protected int $logId,
     ) {}
 
@@ -38,11 +38,11 @@ class SeoAgentProcessContentFromResearchJob implements ShouldQueue
                 'current_phase' => 0,
             ]);
 
-            dispatch(new SeoAgentProcessContentJob($generation, $this->sender, $this->logId));
+            dispatch(new SeoAgentProcessContentJob($generation, $this->chatId, $this->logId));
         } catch (\Exception $e) {
-            $fonnte = app(FonnteService::class);
-            $fonnte->send(
-                $this->sender,
+            $telegram = app(TelegramService::class);
+            $telegram->send(
+                $this->chatId,
                 "❌ Gagal membuat konten dari riset '{$this->research->target_keyword}': {$e->getMessage()}"
             );
         }

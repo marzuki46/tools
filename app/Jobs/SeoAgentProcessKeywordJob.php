@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\SeoAgentLog;
-use App\Services\FonnteService;
+use App\Services\TelegramService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -18,7 +18,7 @@ class SeoAgentProcessKeywordJob implements ShouldQueue
 
     public function __construct(
         protected KeywordResearch $research,
-        protected string $sender,
+        protected string $chatId,
         protected int $logId,
         protected bool $autoGenerateContent = false,
     ) {}
@@ -45,7 +45,7 @@ class SeoAgentProcessKeywordJob implements ShouldQueue
                 'tokens_total' => ($service->tokenUsage['tokens_in'] ?? 0) + ($service->tokenUsage['tokens_out'] ?? 0),
             ]);
 
-            $fonnte = app(FonnteService::class);
+            $telegram = app(TelegramService::class);
 
             $lsiPreview = collect($result['lsi_keywords'] ?? [])
                 ->take(10)
@@ -64,26 +64,25 @@ class SeoAgentProcessKeywordJob implements ShouldQueue
                 . "🏷️ *Entities:*\n• {$entityPreview}\n\n"
                 . "Gunakan `konten {$this->research->target_keyword}` untuk buat artikel.";
 
-            $fonnte->send($this->sender, $reply);
+            $telegram->send($this->chatId, $reply);
 
             SeoAgentLog::where('id', $this->logId)->update([
                 'keyword_research_id' => $this->research->id,
             ]);
 
-            // Auto-generate content if requested
             if ($this->autoGenerateContent) {
                 dispatch(new SeoAgentProcessContentFromResearchJob(
                     $this->research,
-                    $this->sender,
+                    $this->chatId,
                     $this->logId,
                 ));
             }
         } catch (\Exception $e) {
             $this->research->update(['status' => 'failed']);
 
-            $fonnte = app(FonnteService::class);
-            $fonnte->send(
-                $this->sender,
+            $telegram = app(TelegramService::class);
+            $telegram->send(
+                $this->chatId,
                 "❌ Riset keyword '{$this->research->target_keyword}' gagal: {$e->getMessage()}"
             );
 

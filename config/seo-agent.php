@@ -1,15 +1,13 @@
 <?php
 
 return [
-    'fonnte' => [
-        'api_url' => env('FONNTE_API_URL', 'https://api.fonnte.com'),
-        'token' => env('FONNTE_TOKEN', ''),
-        'webhook_secret' => env('FONNTE_WEBHOOK_SECRET', ''),
+    'telegram' => [
+        'token' => env('TELEGRAM_BOT_TOKEN', ''),
     ],
 
-    'allowed_numbers' => explode(',', env('SEO_AGENT_ALLOWED_NUMBERS', '')),
+    'allowed_numbers' => explode(',', env('SEO_AGENT_ALLOWED_USERS', '')),
 
-    'max_message_length' => 1500,
+    'max_message_length' => 4000,
 
     'rate_limit' => [
         'max_attempts' => 10,

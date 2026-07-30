@@ -9,32 +9,18 @@ return new class extends Migration
     {
         $settings = [
             [
-                'key' => 'seo-agent.fonnte.token',
+                'key' => 'seo-agent.telegram.token',
                 'value' => '',
                 'group' => 'seo-agent',
                 'type' => 'password',
-                'description' => 'Fonnte API Token — ambil dari dashboard Fonnte',
-            ],
-            [
-                'key' => 'seo-agent.fonnte.api_url',
-                'value' => 'https://api.fonnte.com',
-                'group' => 'seo-agent',
-                'type' => 'url',
-                'description' => 'Fonnte API URL',
-            ],
-            [
-                'key' => 'seo-agent.fonnte.webhook_secret',
-                'value' => '',
-                'group' => 'seo-agent',
-                'type' => 'password',
-                'description' => 'Fonnte Webhook Secret (optional)',
+                'description' => 'Telegram Bot Token — dapatkan dari @BotFather',
             ],
             [
                 'key' => 'seo-agent.allowed_numbers',
                 'value' => '',
                 'group' => 'seo-agent',
                 'type' => 'text',
-                'description' => 'Nomor WA yang diizinkan, pisahkan dengan koma (kosongkan = semua nomor)',
+                'description' => 'Chat ID Telegram yang diizinkan, pisahkan dengan koma (kosongkan = semua)',
             ],
             [
                 'key' => 'seo-agent.default_user_id',
@@ -45,17 +31,17 @@ return new class extends Migration
             ],
             [
                 'key' => 'seo-agent.max_message_length',
-                'value' => '1500',
+                'value' => '4000',
                 'group' => 'seo-agent',
                 'type' => 'text',
-                'description' => 'Maksimal panjang pesan WA (karakter)',
+                'description' => 'Maksimal panjang pesan Telegram (karakter)',
             ],
             [
                 'key' => 'seo-agent.rate_limit.max_attempts',
                 'value' => '10',
                 'group' => 'seo-agent',
                 'type' => 'text',
-                'description' => 'Maksimal request per menit per nomor',
+                'description' => 'Maksimal request per menit per user',
             ],
         ];
 

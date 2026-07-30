@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\SeoAgentLog;
-use App\Services\FonnteService;
+use App\Services\TelegramService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -18,14 +18,13 @@ class SeoAgentProcessContentJob implements ShouldQueue
 
     public function __construct(
         protected ContentGeneration $generation,
-        protected string $sender,
+        protected string $chatId,
         protected int $logId,
     ) {}
 
     public function handle(ContentGeneratorService $service): void
     {
         try {
-            // Phase 1
             $this->generation->update(['current_phase' => 1, 'status' => 'processing']);
             $phase1 = $service->generatePhase1(
                 $this->generation->target_keyword,
@@ -38,11 +37,9 @@ class SeoAgentProcessContentJob implements ShouldQueue
             );
             $this->generation->update(['phase_1_content' => $phase1, 'current_phase' => 2]);
 
-            // Phase 2
             $questions = $service->generatePhase2($phase1, $this->generation->target_keyword);
             $this->generation->update(['phase_2_questions' => $questions, 'current_phase' => 3]);
 
-            // Phase 3
             $phase3 = $service->generatePhase3(
                 $phase1,
                 $questions,
@@ -61,7 +58,6 @@ class SeoAgentProcessContentJob implements ShouldQueue
                 'tokens_total' => ($service->tokenUsage['tokens_in'] ?? 0) + ($service->tokenUsage['tokens_out'] ?? 0),
             ]);
 
-            // Generate meta
             try {
                 $meta = $service->generateMetaData($phase3, $this->generation->target_keyword, $this->generation->locale ?? 'id');
                 $this->generation->update([
@@ -69,10 +65,9 @@ class SeoAgentProcessContentJob implements ShouldQueue
                     'meta_description' => $meta['description'],
                 ]);
             } catch (\Exception $e) {
-                // Non-critical
             }
 
-            $fonnte = app(FonnteService::class);
+            $telegram = app(TelegramService::class);
 
             $wordCount = str_word_count(strip_tags($phase3));
             $preview = mb_substr(strip_tags($phase3), 0, 250);
@@ -87,7 +82,7 @@ class SeoAgentProcessContentJob implements ShouldQueue
                 . "• `readability {$this->generation->id}` — cek readability\n"
                 . "• `publish {$this->generation->id}` — publish ke WordPress";
 
-            $fonnte->send($this->sender, $reply);
+            $telegram->send($this->chatId, $reply);
 
             SeoAgentLog::where('id', $this->logId)->update([
                 'content_generation_id' => $this->generation->id,
@@ -95,9 +90,9 @@ class SeoAgentProcessContentJob implements ShouldQueue
         } catch (\Exception $e) {
             $this->generation->update(['status' => 'failed']);
 
-            $fonnte = app(FonnteService::class);
-            $fonnte->send(
-                $this->sender,
+            $telegram = app(TelegramService::class);
+            $telegram->send(
+                $this->chatId,
                 "❌ Pembuatan konten '{$this->generation->target_keyword}' gagal di Phase {$this->generation->current_phase}: {$e->getMessage()}"
             );
 
