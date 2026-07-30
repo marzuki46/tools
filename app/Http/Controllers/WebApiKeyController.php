@@ -87,25 +87,6 @@ class WebApiKeyController extends Controller
         abort_if($apiKey->user_id !== $user->id && !$isAdmin, 403);
     }
 
-    public function showKey(ApiKey $apiKey)
-    {
-        $this->authorizeAccess($apiKey);
-
-        $plain = $apiKey->getDecryptedKey();
-
-        if (!$plain) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Could not retrieve the API key. You may need to regenerate it.',
-            ]);
-        }
-
-        return response()->json([
-            'success' => true,
-            'key' => $plain,
-        ]);
-    }
-
     public function showDetail(ApiKey $apiKey)
     {
         $this->authorizeAccess($apiKey);

@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 
 class ApiKey extends Model
@@ -14,7 +13,6 @@ class ApiKey extends Model
         'user_id',
         'name',
         'key',
-        'key_encrypted',
         'key_prefix',
         'last_ip',
         'last_used_at',
@@ -31,7 +29,6 @@ class ApiKey extends Model
 
     protected $hidden = [
         'key',
-        'key_encrypted',
     ];
 
     protected $appends = [
@@ -85,7 +82,6 @@ class ApiKey extends Model
             'user_id' => $userId,
             'name' => $name,
             'key' => hash('sha256', $fullKey),
-            'key_encrypted' => Crypt::encryptString($fullKey),
             'key_prefix' => $fullKey,
             'expires_at' => $expiresAt,
             'max_sites' => $maxSites,
@@ -95,18 +91,6 @@ class ApiKey extends Model
             'api_key' => $apiKey,
             'plain_text' => $fullKey,
         ];
-    }
-
-    public function getDecryptedKey(): ?string
-    {
-        if (!$this->key_encrypted) {
-            return null;
-        }
-        try {
-            return Crypt::decryptString($this->key_encrypted);
-        } catch (\Exception) {
-            return null;
-        }
     }
 
     public static function authenticate(string $plainText): ?self

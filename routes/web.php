@@ -41,7 +41,6 @@ Route::middleware('auth')->group(function () {
     Route::delete('/api-keys/{apiKey}', [WebApiKeyController::class, 'destroy'])->name('api-keys.destroy');
     Route::post('/api-keys/{apiKey}/suspend', [WebApiKeyController::class, 'suspend'])->name('api-keys.suspend');
     Route::post('/api-keys/{apiKey}/unsuspend', [WebApiKeyController::class, 'unsuspend'])->name('api-keys.unsuspend');
-    Route::get('/api-keys/{apiKey}/key', [WebApiKeyController::class, 'showKey'])->name('api-keys.show-key');
     Route::get('/api-keys/{apiKey}/detail', [WebApiKeyController::class, 'showDetail'])->name('api-keys.detail');
     Route::get('/api-keys/{apiKey}/websites', [WebApiKeyController::class, 'websites'])->name('api-keys.websites');
     Route::post('/api-keys/{apiKey}/toggle-website', [WebApiKeyController::class, 'toggleWebsite'])->name('api-keys.toggle-website');

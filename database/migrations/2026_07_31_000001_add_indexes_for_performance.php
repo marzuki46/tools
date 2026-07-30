@@ -73,10 +73,19 @@ return new class extends Migration
                 $table->index('user_id', 'idx_bp_user_id');
             });
         }
+
+        // Hapus key_encrypted — sudah tidak dipakai
+        Schema::table('api_keys', function (Blueprint $table) {
+            $table->dropColumn('key_encrypted');
+        });
     }
 
     public function down(): void
     {
+        Schema::table('api_keys', function (Blueprint $table) {
+            $table->text('key_encrypted')->nullable()->after('key');
+        });
+
         DB::statement('ALTER TABLE api_keys MODIFY key_prefix VARCHAR(14) NULL');
 
         Schema::table('api_keys', function (Blueprint $table) {
