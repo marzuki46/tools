@@ -12,6 +12,8 @@ class CommandParser
         $kw = preg_replace('/<[^>]+>/', '', $kw);
         $kw = preg_replace('/\s*[—–-]\s*(?:Cek|cek|Lihat|lihat).*$/u', '', $kw);
         $kw = preg_replace('/\s+di\s+indonesia$/i', '', $kw);
+        $kw = preg_replace('/^(?:keyword|topik|tentang)\s+/i', '', $kw);
+        $kw = preg_replace('/\s*\?+$/', '', $kw);
         return trim($kw);
     }
 
@@ -20,7 +22,7 @@ class CommandParser
         $text = trim($text);
         $lower = mb_strtolower($text);
 
-        // ── Help (harus paling awal biar gak ketiban pattern lain) ──
+        // ── Help ──
         if (preg_match('/^(?:bantuan|help|tolong|menu|perintah|command|\/start|\/help)/i', $text)) {
             return ['type' => 'HELP'];
         }
@@ -34,7 +36,16 @@ class CommandParser
         }
 
         // ── Research ──
-        if (preg_match('/(?:riset|research|teliti)\s+(.+)/i', $text, $m)) {
+        // "riset" / "risetkan" / "research" diikuti keyword
+        if (preg_match('/(?:riset(?:kan)?|research)\s+(?:tentang\s+|keyword\s+)?(.+)/i', $text, $m)) {
+            return ['type' => 'RESEARCH', 'keyword' => $this->cleanKeyword($m[1])];
+        }
+        // "coba (kamu) riset(kan) ..."
+        if (preg_match('/^coba\s+(?:kamu|km|lo|lu)?\s*riset(?:kan)?\s+(?:tentang\s+|keyword\s+)?(.+)/i', $text, $m)) {
+            return ['type' => 'RESEARCH', 'keyword' => $this->cleanKeyword($m[1])];
+        }
+        // "teliti ..."
+        if (preg_match('/^teliti\s+(.+)/i', $text, $m)) {
             return ['type' => 'RESEARCH', 'keyword' => $this->cleanKeyword($m[1])];
         }
 
@@ -56,8 +67,17 @@ class CommandParser
         }
 
         // ── Check keyword ──
-        if (preg_match('/(?:cek|periksa)\s+(?:keyword\s+)?(.+)/i', $text, $m)) {
+        if (preg_match('/(?:cek|periksa)\s+(?:keyword\s+|topik\s+)?(.+)/i', $text, $m)) {
             return ['type' => 'CHECK_KEYWORD', 'keyword' => $this->cleanKeyword($m[1])];
+        }
+
+        // ── Pertanyaan umum → Research ──
+        // "berapa/berapakah/bagaimana/cara/gimana + keyword"
+        if (preg_match('/^(?:berapakah|berapa|bagaimana|cara|gimana|apakah)\s+(.+)/i', $text, $m)) {
+            $kw = $this->cleanKeyword($m[1]);
+            if (mb_strlen($kw) > 5) {
+                return ['type' => 'RESEARCH', 'keyword' => $kw];
+            }
         }
 
         // ── Status ──
@@ -84,7 +104,7 @@ class CommandParser
         }
 
         // ── Queue worker ──
-        if (preg_match('/(?:hidupkan|jalankan|start)\s+(?:worker|queue|antrian)/i', $text)) {
+        if (preg_match('/(?:hidupkan|jalankan|start|aktifkan)\s+(?:worker|queue|antrian)/i', $text)) {
             return ['type' => 'QUEUE'];
         }
         if (preg_match('/^queue(?:\s+status)?$/i', $text)) {
