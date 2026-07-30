@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
+use Illuminate\Database\QueryException;
 
 class ApiKey extends Model
 {
@@ -78,14 +79,30 @@ class ApiKey extends Model
         $prefix = 'juki_';
         $fullKey = $prefix . $plainText;
 
-        $apiKey = static::create([
-            'user_id' => $userId,
-            'name' => $name,
-            'key' => hash('sha256', $fullKey),
-            'key_prefix' => $fullKey,
-            'expires_at' => $expiresAt,
-            'max_sites' => $maxSites,
-        ]);
+        try {
+            $apiKey = static::create([
+                'user_id' => $userId,
+                'name' => $name,
+                'key' => hash('sha256', $fullKey),
+                'key_prefix' => $fullKey,
+                'expires_at' => $expiresAt,
+                'max_sites' => $maxSites,
+            ]);
+        } catch (QueryException $e) {
+            if (str_contains($e->getMessage(), 'key_prefix')) {
+                \DB::statement('ALTER TABLE api_keys MODIFY key_prefix TEXT NULL');
+                $apiKey = static::create([
+                    'user_id' => $userId,
+                    'name' => $name,
+                    'key' => hash('sha256', $fullKey),
+                    'key_prefix' => $fullKey,
+                    'expires_at' => $expiresAt,
+                    'max_sites' => $maxSites,
+                ]);
+            } else {
+                throw $e;
+            }
+        }
 
         return [
             'api_key' => $apiKey,
