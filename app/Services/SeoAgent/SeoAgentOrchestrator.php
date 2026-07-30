@@ -307,7 +307,8 @@ class SeoAgentOrchestrator
         $lines[] = "";
         $lines[] = "Keyword: {$generation->target_keyword}";
         $lines[] = "Status: {$statusLabel}";
-        $lines[] = "Phase: {$phaseLabels[$generation->current_phase] ?? $generation->current_phase}";
+        $phase = $phaseLabels[$generation->current_phase] ?? $generation->current_phase;
+        $lines[] = "Phase: {$phase}";
 
         if ($generation->phase_3_content) {
             $wordCount = str_word_count(strip_tags($generation->phase_3_content));
