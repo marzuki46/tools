@@ -42,6 +42,22 @@ class ToolSeeder extends Seeder
                 'package_name' => null,
                 'is_active' => true,
             ],
+            [
+                'name' => 'Keyword Research',
+                'slug' => 'keyword-research',
+                'description' => 'AI-powered keyword research with LSI keywords and entity extraction.',
+                'icon' => 'keyword',
+                'package_name' => null,
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Content Generator',
+                'slug' => 'content-generator',
+                'description' => 'Multi-phase AI content generation with SEO optimization.',
+                'icon' => 'content',
+                'package_name' => null,
+                'is_active' => true,
+            ],
         ];
 
         foreach ($tools as $tool) {
