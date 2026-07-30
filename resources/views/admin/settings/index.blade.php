@@ -14,6 +14,7 @@
                 'ai-providers' => 'AI Providers Configuration',
                 'keyword-research' => 'Keyword Research',
                 'content-generator' => 'Content Generator',
+                'seo-agent' => 'SEO Agent (WhatsApp)',
             ];
         @endphp
 
