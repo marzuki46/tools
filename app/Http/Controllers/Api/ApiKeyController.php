@@ -10,6 +10,76 @@ use Illuminate\Support\Facades\DB;
 
 class ApiKeyController extends Controller
 {
+    public function checkStatus(Request $request)
+    {
+        $apiKey = $request->header('X-API-Key') ?? $request->bearerToken();
+
+        if (!$apiKey) {
+            return response()->json([
+                'active' => false,
+                'status' => 'invalid',
+                'message' => 'API key is required.',
+            ]);
+        }
+
+        $hashed = hash('sha256', $apiKey);
+        $key = ApiKey::where('key', $hashed)->first();
+
+        if (!$key) {
+            return response()->json([
+                'active' => false,
+                'status' => 'invalid',
+                'message' => 'Invalid API key.',
+            ]);
+        }
+
+        if (!$key->is_active) {
+            return response()->json([
+                'active' => false,
+                'status' => 'suspended',
+                'message' => 'API key is suspended. Contact support.',
+                'expires_at' => $key->expires_at?->toISOString(),
+            ]);
+        }
+
+        if ($key->isExpired()) {
+            return response()->json([
+                'active' => false,
+                'status' => 'expired',
+                'message' => 'API key has expired. Renew your key.',
+                'expires_at' => $key->expires_at?->toISOString(),
+            ]);
+        }
+
+        $domain = $request->header('X-Site-Domain') ?: null;
+        if (!$domain) {
+            $origin = $request->header('Origin');
+            $referer = $request->header('Referer');
+            $domain = $origin ? parse_url($origin, PHP_URL_HOST) : ($referer ? parse_url($referer, PHP_URL_HOST) : null);
+        }
+
+        $websiteStatus = 'active';
+        if ($domain) {
+            $website = $key->websites()->where('domain', $domain)->first();
+            if ($website && !$website->is_active) {
+                $websiteStatus = 'blocked';
+            }
+        }
+
+        return response()->json([
+            'active' => true,
+            'status' => 'active',
+            'expires_at' => $key->expires_at?->toISOString(),
+            'website_status' => $websiteStatus,
+            'domain' => $domain,
+            'max_sites' => $key->max_sites,
+            'sites_used' => $key->websites()->count(),
+            'message' => 'API key is active.',
+        ]);
+    }
+
+class ApiKeyController extends Controller
+{
     public function index()
     {
         $keys = Auth::user()->apiKeys()

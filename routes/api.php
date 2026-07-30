@@ -26,6 +26,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/api-keys/{apiKey}/regenerate', [ApiKeyController::class, 'regenerate']);
 });
 
+// Key status check (no auth — works even for suspended/expired keys)
+Route::get('/v1/key-status', [\App\Http\Controllers\Api\ApiKeyController::class, 'checkStatus']);
+
 // External API routes (via API Key middleware)
 Route::prefix('v1')->middleware(['api-key'])->group(function () {
     Route::get('/status', function () {

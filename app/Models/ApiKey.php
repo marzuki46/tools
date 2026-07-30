@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 
 class ApiKey extends Model
@@ -12,10 +14,13 @@ class ApiKey extends Model
         'user_id',
         'name',
         'key',
+        'key_encrypted',
+        'key_prefix',
         'last_ip',
         'last_used_at',
         'expires_at',
         'is_active',
+        'max_sites',
     ];
 
     protected $casts = [
@@ -26,6 +31,12 @@ class ApiKey extends Model
 
     protected $hidden = [
         'key',
+        'key_encrypted',
+    ];
+
+    protected $appends = [
+        'suffix',
+        'status',
     ];
 
     public function user(): BelongsTo
@@ -33,7 +44,38 @@ class ApiKey extends Model
         return $this->belongsTo(User::class);
     }
 
-    public static function generate(string $name, int $userId, ?string $expiresAt = null): array
+    public function websites(): HasMany
+    {
+        return $this->hasMany(ApiKeyWebsite::class);
+    }
+
+    public function getSuffixAttribute(): string
+    {
+        return $this->key_prefix ?? 'juki_...';
+    }
+
+    public function getStatusAttribute(): string
+    {
+        if (!$this->is_active) {
+            return 'suspended';
+        }
+        if ($this->expires_at && $this->expires_at->isPast()) {
+            return 'expired';
+        }
+        return 'active';
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->expires_at && $this->expires_at->isPast();
+    }
+
+    public function canUse(): bool
+    {
+        return $this->is_active && !$this->isExpired();
+    }
+
+    public static function generate(string $name, int $userId, ?string $expiresAt = null, ?int $maxSites = null): array
     {
         $plainText = Str::random(40);
         $prefix = 'juki_';
@@ -43,13 +85,28 @@ class ApiKey extends Model
             'user_id' => $userId,
             'name' => $name,
             'key' => hash('sha256', $fullKey),
+            'key_encrypted' => Crypt::encryptString($fullKey),
+            'key_prefix' => substr($fullKey, 0, 10) . '...',
             'expires_at' => $expiresAt,
+            'max_sites' => $maxSites,
         ]);
 
         return [
             'api_key' => $apiKey,
             'plain_text' => $fullKey,
         ];
+    }
+
+    public function getDecryptedKey(): ?string
+    {
+        if (!$this->key_encrypted) {
+            return null;
+        }
+        try {
+            return Crypt::decryptString($this->key_encrypted);
+        } catch (\Exception) {
+            return null;
+        }
     }
 
     public static function authenticate(string $plainText): ?self

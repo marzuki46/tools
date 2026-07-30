@@ -20,10 +20,10 @@
                 <thead class="bg-gray-50 border-b">
                     <tr class="text-left text-gray-500">
                         <th class="px-6 py-3 font-medium">Name</th>
-                        <th class="px-6 py-3 font-medium">Prefix</th>
+                        <th class="px-6 py-3 font-medium">Key</th>
                         <th class="px-6 py-3 font-medium">Status</th>
+                        <th class="px-6 py-3 font-medium">Max Sites</th>
                         <th class="px-6 py-3 font-medium">Last Used</th>
-                        <th class="px-6 py-3 font-medium">Last IP</th>
                         <th class="px-6 py-3 font-medium">Expires</th>
                         <th class="px-6 py-3 font-medium">Created</th>
                     </tr>
@@ -32,15 +32,19 @@
                     @foreach ($keys as $key)
                         <tr class="hover:bg-gray-50 transition">
                             <td class="px-6 py-4 font-medium text-gray-900">{{ $key->name }}</td>
-                            <td class="px-6 py-4 text-gray-500 font-mono text-xs">{{ $key->prefix }}...</td>
+                            <td class="px-6 py-4 text-gray-500 font-mono text-xs">{{ $key->suffix }}</td>
                             <td class="px-6 py-4">
-                                @php $isActive = $key->is_active && (!$key->expires_at || $key->expires_at->isFuture()); @endphp
-                                <span class="px-2 py-0.5 rounded-full text-xs font-medium {{ $isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500' }}">
-                                    {{ $isActive ? 'Active' : 'Inactive' }}
+                                @php
+                                    $status = $key->status;
+                                    $colors = ['active' => 'bg-green-100 text-green-700', 'suspended' => 'bg-red-100 text-red-700', 'expired' => 'bg-amber-100 text-amber-700'];
+                                    $label = $colors[$status] ?? 'bg-gray-100 text-gray-500';
+                                @endphp
+                                <span class="px-2 py-0.5 rounded-full text-xs font-medium {{ $label }}">
+                                    {{ ucfirst($status) }}
                                 </span>
                             </td>
+                            <td class="px-6 py-4 text-gray-500">{{ $key->max_sites ?? '∞' }}</td>
                             <td class="px-6 py-4 text-gray-500">{{ $key->last_used_at?->diffForHumans() ?? 'Never' }}</td>
-                            <td class="px-6 py-4 text-gray-500 font-mono text-xs">{{ $key->last_ip ?? '—' }}</td>
                             <td class="px-6 py-4 text-gray-500">{{ $key->expires_at?->format('M d, Y') ?? 'Never' }}</td>
                             <td class="px-6 py-4 text-gray-500">{{ $key->created_at->format('M d, Y') }}</td>
                         </tr>
