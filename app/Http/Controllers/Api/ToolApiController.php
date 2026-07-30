@@ -24,6 +24,7 @@ class ToolApiController extends Controller
             'generate' => 'handleContentGenerate',
             'status' => 'handleContentStatus',
             'generate-meta' => 'handleGenerateMeta',
+            'regen-phase3' => 'handleContentRegenPhase3',
         ],
     ];
 
@@ -176,6 +177,57 @@ class ToolApiController extends Controller
                 'updated_at' => $generation->updated_at,
             ],
         ]);
+    }
+
+    private function handleContentRegenPhase3(Request $request): JsonResponse
+    {
+        $request->validate(['id' => 'required|integer']);
+
+        $generation = ContentGeneration::where('user_id', auth()->id())
+            ->findOrFail($request->id);
+
+        if (empty($generation->phase_1_content) || empty($generation->phase_2_questions)) {
+            return response()->json(['success' => false, 'message' => 'Phase 1 & 2 must be completed first.'], 400);
+        }
+
+        $questions = is_string($generation->phase_2_questions)
+            ? json_decode($generation->phase_2_questions, true) ?: []
+            : ($generation->phase_2_questions ?? []);
+
+        try {
+            $content = app(ContentGeneratorService::class)->generatePhase3(
+                $generation->phase_1_content,
+                $questions,
+                $generation->target_keyword,
+                $generation->locale ?? 'id',
+                $generation->tone ?? 'informative',
+                $generation->lsi_keywords ?? [],
+                $generation->entities ?? []
+            );
+
+            $generation->update([
+                'phase_3_content' => $content,
+                'meta_title' => null,
+                'meta_description' => null,
+                'status' => 'completed',
+                'current_phase' => 3,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'id' => $generation->id,
+                    'phase_3_content' => $content,
+                    'current_phase' => 3,
+                    'status' => 'completed',
+                ],
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Regen phase 3 failed', [
+                'id' => $generation->id, 'error' => $e->getMessage(),
+            ]);
+            return response()->json(['success' => false, 'message' => 'Failed to regenerate phase 3.'], 500);
+        }
     }
 
     private function handleGenerateMeta(Request $request): JsonResponse

@@ -116,11 +116,18 @@ class ContentGeneratorService
 
         $toneDesc = $toneLabels[$tone] ?? $tone;
 
+        $langName = $locale === 'en' ? 'English' : 'Bahasa Indonesia';
+        $langRule = $locale === 'en'
+            ? 'WRITE 100% IN ENGLISH. Never use Indonesian. The ENTIRE article must be in fluent, natural English.'
+            : 'TULIS 100% DALAM BAHASA INDONESIA. Jangan campur dengan bahasa Inggris. Seluruh artikel harus dalam Bahasa Indonesia yang baik dan benar.';
+
         return <<<PROMPT
 Anda adalah penulis konten profesional. Buat ARTIKEL LENGKAP seperti artikel di blog atau portal berita — BUKAN catatan, BUKAN poin-poin, BUKAN outline.
 
+{$langRule}
+
 Target Keyword: {$keyword}
-Bahasa: {$locale}
+Bahasa: {$langName}
 Nada/Tone: {$toneDesc}
 
 LSI Keywords (wajib digunakan secara natural):
@@ -229,12 +236,18 @@ PROMPT;
         ];
 
         $toneDesc = $toneLabels[$tone] ?? $tone;
+        $langName = $locale === 'en' ? 'English' : 'Bahasa Indonesia';
+        $langRule = $locale === 'en'
+            ? 'WRITE 100% IN ENGLISH. Never use Indonesian. The ENTIRE article must be in fluent, natural English.'
+            : 'TULIS 100% DALAM BAHASA INDONESIA. Jangan campur dengan bahasa Inggris. Seluruh artikel harus dalam Bahasa Indonesia yang baik dan benar.';
 
         return <<<PROMPT
 Anda adalah penulis konten profesional. Buat ARTIKEL LENGKAP seperti artikel di blog atau portal berita — BUKAN catatan, BUKAN poin-poin, BUKAN outline.
 
+{$langRule}
+
 Target Keyword: {$keyword}
-Bahasa: {$locale}
+Bahasa: {$langName}
 Nada/Tone: {$toneDesc}
 
 KONTEN AWAL (gunakan sebagai fondasi, lalu KEMBANGKAN):
