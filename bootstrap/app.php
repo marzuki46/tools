@@ -21,6 +21,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'website-tool' => WebsiteToolMiddleware::class,
         ]);
     })
+    ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule): void {
+        $schedule->command('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=300 --tries=3')
+            ->everyMinute()
+            ->withoutOverlapping();
+    })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();
