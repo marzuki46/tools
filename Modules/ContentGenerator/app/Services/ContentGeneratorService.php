@@ -152,6 +152,21 @@ Semua LSI keywords harus muncul minimal sekali
 Semua entities harus tersemat dalam konteks relevan
 Tulisan mengalir seperti artikel profesional — jangan kaku dan jangan seperti daftar
 JANGAN gunakan catatan kaki atau komentar penulis
+
+READABILITY (WAJIB):
+- SETIAP paragraf minimal 3 kalimat — jangan ada paragraf 1-2 kalimat
+- Kalimat dalam satu paragraf harus TERHUBUNG dengan konjungsi (dan, tetapi, sementara, sehingga, karena, namun, oleh karena itu, selain itu, di sisi lain)
+- JANGAN pernah menulis 2+ kalimat pendek beruntun tanpa kata hubung — itu namanya gaya staccato, sangat tidak enak dibaca
+- Variasikan panjang kalimat: ada yang pendek (5-8 kata), ada yang sedang (10-15 kata), ada yang panjang (16-25 kata)
+- Gunakan kata transisi antarkalimat: "Selain itu...", "Di sisi lain...", "Lebih lanjut...", "Sebagai contoh...", "Pada akhirnya...", "Tak hanya itu..."
+- SETIAP heading harus memiliki 2-5 paragraf dengan total minimal 5 kalimat
+
+Contoh format paragraf yang BENAR:
+"Industri hiburan Tiongkok telah mengalami transformasi besar-besaran dalam satu dekade terakhir, dan hasilnya kini terlihat jelas di layar kaca maupun platform streaming global. Berkat investasi miliaran dolar dari pemerintah dan perusahaan swasta, kualitas produksi drama-drama Mandarin kini mampu bersaing dengan produksi Hollywood. Selain itu, cerita yang diangkat semakin kompleks dan relevan dengan isu-isu universal, sehingga penonton dari berbagai latar belakang budaya pun merasa terhubung. Tak heran jika popularitas Dracin melonjak drastis di Asia Tenggara, termasuk Indonesia."
+
+Contoh format paragraf yang SALAH (JANGAN):
+"Hiburan Tiongkok dominasi layar Asia. Penonton global pilih drama cina. Kualitas produksi naik drastis. Cerita makin kompleks."
+
 {$memoryText}
 {$businessText}
 Output HANYA konten artikel dalam format Markdown, tanpa penjelasan tambahan di luar konten.
@@ -258,6 +273,20 @@ Semua entities harus tersemat dalam konteks relevan
 Tulisan mengalir seperti artikel profesional — jangan kaku dan jangan seperti daftar
 JANGAN gunakan format Q&A — integrasikan semua dalam alur artikel naratif
 JANGAN ada catatan kaki, komentar penulis, atau metadata apapun
+
+READABILITY (WAJIB):
+- SETIAP paragraf minimal 3 kalimat — jangan ada paragraf 1-2 kalimat
+- Kalimat dalam satu paragraf harus TERHUBUNG dengan konjungsi (dan, tetapi, sementara, sehingga, karena, namun, oleh karena itu, selain itu, di sisi lain)
+- JANGAN pernah menulis 2+ kalimat pendek beruntun tanpa kata hubung — itu namanya gaya staccato, sangat tidak enak dibaca
+- Variasikan panjang kalimat: ada yang pendek (5-8 kata), ada yang sedang (10-15 kata), ada yang panjang (16-25 kata)
+- Gunakan kata transisi antarkalimat: "Selain itu...", "Di sisi lain...", "Lebih lanjut...", "Sebagai contoh...", "Pada akhirnya...", "Tak hanya itu..."
+- SETIAP heading harus memiliki 2-5 paragraf dengan total minimal 5 kalimat
+
+Contoh format paragraf yang BENAR:
+"Industri hiburan Tiongkok telah mengalami transformasi besar-besaran dalam satu dekade terakhir, dan hasilnya kini terlihat jelas di layar kaca maupun platform streaming global. Berkat investasi miliaran dolar dari pemerintah dan perusahaan swasta, kualitas produksi drama-drama Mandarin kini mampu bersaing dengan produksi Hollywood. Selain itu, cerita yang diangkat semakin kompleks dan relevan dengan isu-isu universal, sehingga penonton dari berbagai latar belakang budaya pun merasa terhubung. Tak heran jika popularitas Dracin melonjak drastis di Asia Tenggara, termasuk Indonesia."
+
+Contoh format paragraf yang SALAH (JANGAN):
+"Hiburan Tiongkok dominasi layar Asia. Penonton global pilih drama cina. Kualitas produksi naik drastis. Cerita makin kompleks."
 
 Output HANYA konten artikel dalam format Markdown, tanpa penjelasan tambahan di luar konten.
 PROMPT;
