@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ApiKeyWebsite;
 use App\Models\Tools\Tool;
 use App\Models\Websites\Website;
 use App\Models\Websites\WebsiteTool;
@@ -12,11 +13,11 @@ class WebsiteController extends Controller
 {
     public function index()
     {
-        $websites = Auth::user()->websites()
-            ->withCount(['tools' => function ($q) {
-                $q->where('is_active', true);
-            }])
-            ->orderBy('created_at', 'desc')
+        $apiKeyIds = Auth::user()->apiKeys()->pluck('id');
+
+        $websites = ApiKeyWebsite::with('apiKey')
+            ->whereIn('api_key_id', $apiKeyIds)
+            ->orderBy('last_used_at', 'desc')
             ->paginate(20);
 
         return view('dashboard.websites.index', ['websites' => $websites]);
