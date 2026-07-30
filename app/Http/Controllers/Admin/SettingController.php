@@ -37,10 +37,14 @@ class SettingController extends Controller
             ->with('success', 'Settings updated successfully.');
     }
 
-    public function setTelegramWebhook(Request $request): RedirectResponse
+    public function setTelegramWebhook(Request $request): JsonResponse|RedirectResponse
     {
         $url = $request->input('url', url('/api/seo-agent/webhook'));
         $result = $this->telegram->setWebhook($url);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json($result);
+        }
 
         if ($result['success']) {
             return redirect()->route('admin.settings')

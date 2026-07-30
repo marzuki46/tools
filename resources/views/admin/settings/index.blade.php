@@ -58,14 +58,13 @@
                     @if ($group === 'seo-agent')
                         <hr class="border-gray-200">
                         <div class="space-y-3">
-                            <form method="POST" action="{{ route('admin.settings.telegram-webhook') }}" class="flex items-center gap-3">
-                                @csrf
-                                <input type="text" name="url" value="{{ url('/api/seo-agent/webhook') }}"
+                            <div class="flex items-center gap-3">
+                                <input type="text" id="webhook-url" value="{{ url('/api/seo-agent/webhook') }}"
                                     class="flex-1 max-w-md px-4 py-2 border border-gray-300 rounded-lg text-sm font-mono">
-                                <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition shadow-sm">
+                                <button type="button" onclick="setWebhook()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition shadow-sm">
                                     Set Webhook
                                 </button>
-                            </form>
+                            </div>
                             <div>
                                 <button type="button" onclick="cekWebhook()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition shadow-sm">
                                     Cek Status Webhook
@@ -96,6 +95,29 @@ function cekWebhook() {
         .then(r => r.json())
         .then(d => { pre.textContent = JSON.stringify(d, null, 2); })
         .catch(e => { pre.textContent = 'Error: ' + e.message; });
+}
+
+function setWebhook() {
+    const pre = document.getElementById('webhook-info');
+    const url = document.getElementById('webhook-url').value;
+    pre.classList.remove('hidden');
+    pre.textContent = 'Setting webhook...';
+    fetch('{{ route("admin.settings.telegram-webhook") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}',
+        },
+        body: JSON.stringify({ url: url })
+    })
+    .then(r => r.json())
+    .then(d => {
+        pre.textContent = JSON.stringify(d, null, 2);
+        if (d.success) {
+            setTimeout(cekWebhook, 1000);
+        }
+    })
+    .catch(e => { pre.textContent = 'Error: ' + e.message; });
 }
 </script>
 @endpush

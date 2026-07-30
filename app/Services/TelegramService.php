@@ -57,15 +57,23 @@ class TelegramService
 
     public function setWebhook(string $url): array
     {
+        if (empty($this->token)) {
+            Log::error('TelegramService: token not configured');
+            return ['success' => false, 'message' => 'Telegram token belum diisi'];
+        }
+
         try {
+            Log::info('TelegramService: setting webhook', ['url' => $url]);
             $response = Http::timeout(15)->post("{$this->apiUrl}/setWebhook", [
                 'url' => $url,
                 'allowed_updates' => ['message'],
             ]);
 
             $body = $response->json();
-            return ['success' => ($body['ok'] ?? false), 'data' => $body];
+            Log::info('TelegramService: setWebhook response', ['body' => $body]);
+            return ['success' => ($body['ok'] ?? false), 'data' => $body, 'message' => $body['description'] ?? null];
         } catch (Exception $e) {
+            Log::error('TelegramService: setWebhook exception', ['error' => $e->getMessage()]);
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
@@ -83,11 +91,21 @@ class TelegramService
 
     public function getWebhookInfo(): array
     {
+        if (empty($this->token)) {
+            return ['url' => '', 'error' => 'Telegram token belum diisi'];
+        }
+
         try {
-            $response = Http::timeout(15)->get("{$this->apiUrl}/getWebhookInfo");
-            return $response->json()['result'] ?? [];
+            $response = Http::timeout(10)->get("{$this->apiUrl}/getWebhookInfo");
+            $body = $response->json();
+            if (!($body['ok'] ?? false)) {
+                Log::warning('TelegramService: getWebhookInfo failed', ['body' => $body]);
+                return ['url' => '', 'error' => $body['description'] ?? 'unknown error'];
+            }
+            return $body['result'] ?? [];
         } catch (Exception $e) {
-            return [];
+            Log::error('TelegramService: getWebhookInfo exception', ['error' => $e->getMessage()]);
+            return ['url' => '', 'error' => $e->getMessage()];
         }
     }
 
