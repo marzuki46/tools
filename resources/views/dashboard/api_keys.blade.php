@@ -33,6 +33,7 @@
                 <thead class="bg-gray-50 border-b">
                     <tr class="text-left text-gray-500">
                         <th class="px-6 py-3 font-medium">Name</th>
+                        <th class="px-6 py-3 font-medium">Email</th>
                         <th class="px-6 py-3 font-medium">Key</th>
                         <th class="px-6 py-3 font-medium">Sites</th>
                         <th class="px-6 py-3 font-medium">Status</th>
@@ -47,6 +48,7 @@
                             <td class="px-6 py-4">
                                 <span class="font-medium">{{ $key->name }}</span>
                             </td>
+                            <td class="px-6 py-4 text-gray-500 text-xs">{{ auth()->user()->email }}</td>
                             <td class="px-6 py-4">
                                 <div class="flex items-center space-x-2">
                                     <code class="text-xs font-mono text-gray-500" id="key-display-{{ $key->id }}">

@@ -78,8 +78,6 @@ class ApiKeyController extends Controller
         ]);
     }
 
-class ApiKeyController extends Controller
-{
     public function index()
     {
         $keys = Auth::user()->apiKeys()
