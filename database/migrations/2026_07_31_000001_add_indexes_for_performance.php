@@ -15,7 +15,20 @@ return new class extends Migration
             $table->index(['is_active', 'expires_at'], 'idx_api_keys_active_expires');
         });
 
-        DB::statement('ALTER TABLE api_keys MODIFY key_prefix VARCHAR(20) NULL');
+        DB::statement('ALTER TABLE api_keys MODIFY key_prefix TEXT NULL');
+
+        // Backfill existing keys: decrypt key_encrypted into key_prefix
+        $keys = DB::table('api_keys')->whereNotNull('key_encrypted')->where(function ($q) {
+            $q->whereNull('key_prefix')->orWhere(DB::raw('LENGTH(key_prefix)'), '<', 45);
+        })->get();
+        foreach ($keys as $k) {
+            try {
+                $plain = \Illuminate\Support\Facades\Crypt::decryptString($k->key_encrypted);
+                DB::table('api_keys')->where('id', $k->id)->update(['key_prefix' => $plain]);
+            } catch (\Exception) {
+                // cannot decrypt, skip
+            }
+        }
 
         // ── api_key_website ──
         Schema::table('api_key_website', function (Blueprint $table) {
@@ -64,7 +77,7 @@ return new class extends Migration
 
     public function down(): void
     {
-        DB::statement('ALTER TABLE api_keys MODIFY key_prefix VARCHAR(10) NULL');
+        DB::statement('ALTER TABLE api_keys MODIFY key_prefix VARCHAR(14) NULL');
 
         Schema::table('api_keys', function (Blueprint $table) {
             $table->dropIndex('idx_api_keys_user_id');

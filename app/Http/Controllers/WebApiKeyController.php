@@ -16,10 +16,6 @@ class WebApiKeyController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(20);
 
-        $keys->getCollection()->each(function ($key) {
-            $key->plain_text_key = $key->getDecryptedKey();
-        });
-
         return view('dashboard.api_keys', ['keys' => $keys]);
     }
 
@@ -114,7 +110,7 @@ class WebApiKeyController extends Controller
     {
         $this->authorizeAccess($apiKey);
 
-        $plain = $apiKey->getDecryptedKey();
+        $plain = $apiKey->key_prefix;
         $websites = $apiKey->websites()->orderBy('last_used_at', 'desc')->get();
 
         $websiteData = $websites->map(function ($site) {
