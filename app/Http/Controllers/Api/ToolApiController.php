@@ -59,8 +59,11 @@ class ToolApiController extends Controller
             'webhook_secret' => 'nullable|string|max:255',
         ]);
 
+        $website = $request->attributes->get('api_key_website');
+
         $research = KeywordResearch::create([
             'user_id' => auth()->id(),
+            'api_key_website_id' => $website?->id,
             'target_keyword' => $validated['keyword'],
             'locale' => $validated['locale'] ?? 'id',
             'lsi_count' => $validated['lsi_count'] ?? 12,
@@ -121,8 +124,11 @@ class ToolApiController extends Controller
             'keyword_research_id' => 'nullable|integer|exists:keyword_researches,id',
         ]);
 
+        $website = $request->attributes->get('api_key_website');
+
         $generation = ContentGeneration::create([
             'user_id' => auth()->id(),
+            'api_key_website_id' => $website?->id,
             'target_keyword' => $validated['keyword'],
             'locale' => $validated['locale'] ?? 'id',
             'tone' => $validated['tone'] ?? 'informative',

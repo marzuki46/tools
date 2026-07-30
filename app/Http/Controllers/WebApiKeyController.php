@@ -81,7 +81,11 @@ class WebApiKeyController extends Controller
 
     public function showKey(ApiKey $apiKey)
     {
-        abort_if($apiKey->user_id !== Auth::id(), 403);
+        $user = Auth::user();
+
+        $isAdmin = $user->hasRole('admin') ?? $user->is_admin ?? false;
+
+        abort_if($apiKey->user_id !== $user->id && !$isAdmin, 403);
 
         $plain = $apiKey->getDecryptedKey();
 

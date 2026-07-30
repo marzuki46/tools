@@ -111,7 +111,7 @@ class UserController extends Controller
     public function apiKeys(User $user)
     {
         $this->authorizeAdmin();
-        $keys = $user->apiKeys()->orderBy('created_at', 'desc')->paginate(20);
+        $keys = $user->apiKeys()->with('user')->orderBy('created_at', 'desc')->paginate(20);
         return view('admin.users.api_keys', compact('user', 'keys'));
     }
 

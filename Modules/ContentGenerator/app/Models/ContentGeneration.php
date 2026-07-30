@@ -11,6 +11,7 @@ class ContentGeneration extends Model
 
     protected $fillable = [
         'user_id',
+        'api_key_website_id',
         'target_keyword',
         'locale',
         'tone',
@@ -26,6 +27,9 @@ class ContentGeneration extends Model
         'status',
         'current_phase',
         'raw_response',
+        'tokens_in',
+        'tokens_out',
+        'tokens_total',
     ];
 
     protected $casts = [
@@ -33,10 +37,18 @@ class ContentGeneration extends Model
         'entities' => 'array',
         'phase_2_questions' => 'array',
         'raw_response' => 'array',
+        'tokens_in' => 'integer',
+        'tokens_out' => 'integer',
+        'tokens_total' => 'integer',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(config('auth.providers.users.model', 'App\\Models\\User'));
+    }
+
+    public function apiKeyWebsite(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\ApiKeyWebsite::class, 'api_key_website_id');
     }
 }

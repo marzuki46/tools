@@ -12,6 +12,8 @@ class ContentGeneratorService
 {
     private ?CommonMarkConverter $markdown = null;
 
+    public array $tokenUsage = ['tokens_in' => 0, 'tokens_out' => 0];
+
     protected function cfg(string $key, mixed $default = null): mixed
     {
         $db = Setting::getValue("content-generator.{$key}");
@@ -356,6 +358,11 @@ PROMPT;
         }
 
         $data = $response->json();
+
+        $usage = $data['usage'] ?? [];
+        $this->tokenUsage['tokens_in'] += $usage['prompt_tokens'] ?? 0;
+        $this->tokenUsage['tokens_out'] += $usage['completion_tokens'] ?? 0;
+
         return $data['choices'][0]['message']['content'] ?? '';
     }
 

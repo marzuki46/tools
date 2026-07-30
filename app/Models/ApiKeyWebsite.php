@@ -15,11 +15,17 @@ class ApiKeyWebsite extends Model
         'is_active',
         'last_used_at',
         'last_ip',
+        'tokens_in',
+        'tokens_out',
+        'tokens_total',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'last_used_at' => 'datetime',
+        'tokens_in' => 'integer',
+        'tokens_out' => 'integer',
+        'tokens_total' => 'integer',
     ];
 
     public function apiKey(): BelongsTo

@@ -168,7 +168,16 @@ class ProcessContentGenerationJob implements ShouldQueue
                 ]);
             }
 
-            $this->generation->update(['status' => 'completed']);
+            $tokensIn = $service->tokenUsage['tokens_in'];
+            $tokensOut = $service->tokenUsage['tokens_out'];
+            $this->generation->update([
+                'status' => 'completed',
+                'tokens_in' => $tokensIn,
+                'tokens_out' => $tokensOut,
+                'tokens_total' => $tokensIn + $tokensOut,
+            ]);
+
+            $this->syncTokenUsage();
 
             Cache::put('queue_heartbeat', now()->toIso8601String(), 300);
 
@@ -192,7 +201,12 @@ class ProcessContentGenerationJob implements ShouldQueue
             $this->generation->update([
                 'status' => 'failed',
                 'raw_response' => ['error' => $e->getMessage()],
+                'tokens_in' => $service->tokenUsage['tokens_in'],
+                'tokens_out' => $service->tokenUsage['tokens_out'],
+                'tokens_total' => $service->tokenUsage['tokens_in'] + $service->tokenUsage['tokens_out'],
             ]);
+
+            $this->syncTokenUsage();
 
             throw $e;
         }
@@ -210,5 +224,26 @@ class ProcessContentGenerationJob implements ShouldQueue
             'status' => 'failed',
             'raw_response' => ['error' => 'Gagal setelah 3 kali percobaan: ' . $e->getMessage()],
         ]);
+    }
+
+    private function syncTokenUsage(): void
+    {
+        if (!$this->generation->api_key_website_id) {
+            return;
+        }
+
+        try {
+            $site = \App\Models\ApiKeyWebsite::find($this->generation->api_key_website_id);
+            if ($site) {
+                $site->increment('tokens_in', $this->generation->tokens_in);
+                $site->increment('tokens_out', $this->generation->tokens_out);
+                $site->increment('tokens_total', $this->generation->tokens_total);
+            }
+        } catch (\Exception $e) {
+            Log::warning('Failed to sync token usage to website', [
+                'api_key_website_id' => $this->generation->api_key_website_id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

@@ -11,6 +11,7 @@ class KeywordResearch extends Model
 
     protected $fillable = [
         'user_id',
+        'api_key_website_id',
         'target_keyword',
         'locale',
         'lsi_count',
@@ -23,6 +24,9 @@ class KeywordResearch extends Model
         'webhook_url',
         'webhook_secret',
         'webhook_sent_at',
+        'tokens_in',
+        'tokens_out',
+        'tokens_total',
     ];
 
     protected $casts = [
@@ -30,11 +34,19 @@ class KeywordResearch extends Model
         'entities' => 'array',
         'raw_response' => 'array',
         'webhook_sent_at' => 'datetime',
+        'tokens_in' => 'integer',
+        'tokens_out' => 'integer',
+        'tokens_total' => 'integer',
     ];
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(config('auth.providers.users.model', 'App\\Models\\User'));
+    }
+
+    public function apiKeyWebsite(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\ApiKeyWebsite::class, 'api_key_website_id');
     }
 
     public function scopePending($q)

@@ -60,6 +60,8 @@ class ApiKeyMiddleware
                 'last_used_at' => now(),
                 'last_ip' => $request->ip(),
             ]);
+
+            $request->attributes->set('api_key_website', $website);
         }
 
         auth()->login($key->user);
