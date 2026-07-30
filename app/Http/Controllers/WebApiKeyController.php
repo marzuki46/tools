@@ -16,6 +16,10 @@ class WebApiKeyController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate(20);
 
+        $keys->getCollection()->each(function ($key) {
+            $key->plain_text_key = $key->getDecryptedKey();
+        });
+
         return view('dashboard.api_keys', ['keys' => $keys]);
     }
 

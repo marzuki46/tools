@@ -51,8 +51,8 @@
                             <td class="px-6 py-4 text-gray-500 text-xs">{{ auth()->user()->email }}</td>
                             <td class="px-6 py-4">
                                 <div class="flex items-center space-x-2">
-                                    <code class="text-xs font-mono text-gray-500">{{ $key->key_prefix }}</code>
-                                    <button onclick="copyKey({{ $key->id }})" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium" title="Copy full key">Copy</button>
+                                    <code class="text-xs font-mono text-gray-500 break-all max-w-[200px] inline-block">{{ $key->plain_text_key ?? $key->key_prefix }}</code>
+                                    <button onclick="copyKey({{ $key->id }}, {{ $key->plain_text_key ? json_encode($key->plain_text_key) : 'null' }})" class="text-indigo-600 hover:text-indigo-800 text-xs font-medium whitespace-nowrap" title="Copy full key">Copy</button>
                                 </div>
                             </td>
                             <td class="px-6 py-4">
@@ -171,12 +171,9 @@
         <div class="mb-4">
             <div class="flex items-center justify-between">
                 <label class="text-sm font-medium text-gray-700">API Key</label>
-                <div class="flex items-center space-x-2">
-                    <button onclick="dToggleKey()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Show/Hide</button>
-                    <button onclick="dCopyKey()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Copy</button>
-                </div>
+                <button onclick="dCopyKey()" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Copy</button>
             </div>
-            <code id="detail-key" class="block mt-1 p-2 bg-gray-50 border rounded text-xs font-mono break-all select-all">•••••••••••••••••••••••••••••</code>
+            <code id="detail-key" class="block mt-1 p-2 bg-gray-50 border rounded text-xs font-mono break-all select-all">Loading...</code>
         </div>
 
         <div class="mb-4">
@@ -217,8 +214,6 @@
 
 @push('scripts')
 <script>
-let detailKeyCache = null;
-
 function openEditModal(id, name, maxSites) {
     document.getElementById('editKeyForm').action = '{{ url('api-keys') }}/' + id;
     document.getElementById('edit_name').value = name;
@@ -226,22 +221,28 @@ function openEditModal(id, name, maxSites) {
     document.getElementById('editKeyModal').classList.remove('hidden');
 }
 
-function copyKey(id) {
-    fetch('{{ url('api-keys') }}/' + id + '/key')
-        .then(function (r) {
-            if (!r.ok) throw new Error('Server error. Run git pull on the server.');
-            return r.json();
-        })
-        .then(function (data) {
-            if (data.success) {
-                navigator.clipboard.writeText(data.key).then(function () {
-                    alert('API key copied to clipboard!');
-                });
-            } else {
-                alert(data.message || 'Could not retrieve key.');
-            }
-        })
-        .catch(function (err) { alert(err.message); });
+function copyKey(id, key) {
+    if (key) {
+        navigator.clipboard.writeText(key).then(function () {
+            alert('API key copied to clipboard!');
+        });
+    } else {
+        fetch('{{ url('api-keys') }}/' + id + '/key')
+            .then(function (r) {
+                if (!r.ok) throw new Error('Server error.');
+                return r.json();
+            })
+            .then(function (data) {
+                if (data.success) {
+                    navigator.clipboard.writeText(data.key).then(function () {
+                        alert('API key copied to clipboard!');
+                    });
+                } else {
+                    alert(data.message || 'Could not retrieve key.');
+                }
+            })
+            .catch(function (err) { alert(err.message); });
+    }
 }
 
 // ── Detail Modal ──
@@ -249,8 +250,7 @@ function copyKey(id) {
 function showDetail(id) {
     var modal = document.getElementById('detailKeyModal');
     modal.classList.remove('hidden');
-    detailKeyCache = null;
-    document.getElementById('detail-key').textContent = '•••••••••••••••••••••••••••••';
+    document.getElementById('detail-key').textContent = 'Loading...';
     document.getElementById('detail-name').textContent = 'Loading...';
     document.getElementById('detail-websites').innerHTML = '<div class="text-gray-400 text-sm py-4 text-center">Loading...</div>';
 
@@ -262,7 +262,6 @@ function showDetail(id) {
         .then(function (resp) {
             if (!resp.success) throw new Error(resp.message || 'Failed to load.');
             var d = resp.data;
-            detailKeyCache = d.key;
             document.getElementById('detail-name').textContent = d.name + ' (' + d.status + ')';
             document.getElementById('detail-key').textContent = d.key;
             document.getElementById('detail-status').innerHTML = '<span class="px-2 py-0.5 rounded-full text-xs font-medium ' + (d.is_active ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50') + '">' + d.status.charAt(0).toUpperCase() + d.status.slice(1) + '</span>';
