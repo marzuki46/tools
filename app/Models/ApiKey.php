@@ -86,7 +86,7 @@ class ApiKey extends Model
             'name' => $name,
             'key' => hash('sha256', $fullKey),
             'key_encrypted' => Crypt::encryptString($fullKey),
-            'key_prefix' => substr($fullKey, 0, 10) . '...',
+            'key_prefix' => substr($fullKey, 0, 14),
             'expires_at' => $expiresAt,
             'max_sites' => $maxSites,
         ]);
