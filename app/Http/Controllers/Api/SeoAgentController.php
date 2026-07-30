@@ -57,6 +57,7 @@ class SeoAgentController extends Controller
 
         if ($isAsync) {
             \App\Jobs\SeoAgentProcessCommandJob::dispatch((string) $chatId, $text, $name);
+            $this->telegram->send((string) $chatId, "⏳ Perintah diterima! Sedang diproses...");
             return response()->json(['ok' => true]);
         }
 
