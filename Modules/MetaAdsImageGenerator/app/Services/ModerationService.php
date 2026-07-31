@@ -2,6 +2,7 @@
 
 namespace Modules\MetaAdsImageGenerator\Services;
 
+use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -18,8 +19,10 @@ class ModerationService
             }
         }
 
-        $apiKey = config('meta-ads-image-generator.providers.openai.api_key')
+        $apiKey = Setting::getValue('ai.openai.api_key')
+            ?? config('meta-ads-image-generator.providers.openai.api_key')
             ?? config('meta-ads-generator.providers.openai.api_key');
+        $url = rtrim((string) (Setting::getValue('ai.openai.url') ?: config('meta-ads-image-generator.providers.openai.url', 'https://api.openai.com/v1')), '/');
 
         if (!$apiKey) {
             return true;
@@ -28,7 +31,7 @@ class ModerationService
         try {
             $response = Http::withToken($apiKey)
                 ->timeout(10)
-                ->post('https://api.openai.com/v1/moderations', [
+                ->post("{$url}/moderations", [
                     'input' => $text,
                 ]);
 

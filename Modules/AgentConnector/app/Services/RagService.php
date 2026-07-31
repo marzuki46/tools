@@ -71,9 +71,10 @@ class RagService
 
     protected function fetchEmbedding(string $text): ?array
     {
-        $url = Setting::getValue('ai.9router.url', config('agent-connector.ai.url'));
-        $apiKey = Setting::getValue('ai.9router.api_key', config('agent-connector.ai.api_key'));
-        $model = Setting::getValue('ai.9router.embedding_model', config('agent-connector.ai.embedding_model', 'gemini/gemini-embedding-001'));
+        $ai = Setting::aiConfig();
+        $url = $ai['url'];
+        $apiKey = $ai['api_key'];
+        $model = $ai['embedding_model'] ?: 'gemini/gemini-embedding-001';
 
         if (!$url) {
             return null;
@@ -108,7 +109,7 @@ class RagService
 
                     $lastError = new Exception('Embedding kosong dari API');
                 } else {
-                    $lastError = new Exception('9Router HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 300));
+                    $lastError = new Exception('AI HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 300));
                 }
             } catch (Exception $e) {
                 $lastError = $e;

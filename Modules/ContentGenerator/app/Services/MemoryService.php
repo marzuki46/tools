@@ -156,9 +156,10 @@ class MemoryService
     private function getEmbedding(string $text): ?array
     {
         try {
-            $url = Setting::getValue('ai.9router.url', config('content-generator.providers.9router.url'));
-            $apiKey = Setting::getValue('ai.9router.api_key', config('content-generator.providers.9router.api_key'));
-            $model = Setting::getValue('ai.9router.embedding_model', 'gemini/gemini-embedding-001');
+            $ai = Setting::aiConfig();
+            $url = $ai['url'];
+            $apiKey = $ai['api_key'];
+            $model = $ai['embedding_model'] ?: 'gemini/gemini-embedding-001';
 
             if (!$url || !$apiKey) {
                 return null;

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\SchemaMarkup;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -550,14 +551,16 @@ PROMPT;
 
     private function callAi(string $prompt): string
     {
-        $key = config('services.nine_router.key')
+        $ai = Setting::aiConfig();
+        $key = $ai['api_key']
+            ?: config('services.nine_router.key')
             ?: config('services.openai.key')
             ?: config('services.anthropic.key')
             ?: env('AI_API_KEY')
             ?: '';
 
-        $baseUrl = config('services.nine_router.base_url', 'https://api.9router.com/v1');
-        $model = config('services.nine_router.model', 'deepseek-v4-flash-free');
+        $baseUrl = $ai['url'] ?: config('services.nine_router.base_url');
+        $model = $ai['chat_model'] ?: config('services.nine_router.model', 'openai/gpt-4o');
 
         try {
             $response = Http::timeout(60)

@@ -14,6 +14,20 @@ return [
     |
     */
 
+    'nine_router' => [
+        'key' => env('NINEROUTER_KEY'),
+        'base_url' => env('NINEROUTER_URL'),
+        'model' => env('NINEROUTER_MODEL', 'openai/gpt-4o'),
+    ],
+
+    'openai' => [
+        'key' => env('OPENAI_API_KEY'),
+    ],
+
+    'anthropic' => [
+        'key' => env('ANTHROPIC_API_KEY'),
+    ],
+
     'postmark' => [
         'key' => env('POSTMARK_API_KEY'),
     ],

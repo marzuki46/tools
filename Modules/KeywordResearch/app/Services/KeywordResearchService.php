@@ -22,12 +22,13 @@ class KeywordResearchService
 
     public function research(string $keyword, string $locale = 'id', int $lsiCount = 12, int $entitiesCount = 7): array
     {
-        $url = Setting::getValue('ai.9router.url', config('keyword-research.providers.9router.url'));
-        $apiKey = Setting::getValue('ai.9router.api_key', config('keyword-research.providers.9router.api_key'));
-        $model = Setting::getValue('ai.9router.chat_model', config('keyword-research.providers.9router.model', 'openai/gpt-4o'));
+        $ai = Setting::aiConfig();
+        $url = $ai['url'];
+        $apiKey = $ai['api_key'];
+        $model = $ai['chat_model'];
 
         if (!$url) {
-            throw new Exception('9Router URL is not configured.');
+            throw new Exception('AI URL is not configured.');
         }
 
         $systemPrompt = <<<PROMPT
@@ -93,7 +94,7 @@ PROMPT;
                     break;
                 }
 
-                $lastError = new Exception('9Router HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 300));
+                $lastError = new Exception('AI HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 300));
             } catch (\Throwable $e) {
                 $lastError = $e;
             }

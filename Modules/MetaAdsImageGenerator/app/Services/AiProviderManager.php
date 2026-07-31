@@ -42,12 +42,13 @@ class AiProviderManager
 
     protected function generateWithPollinations(string $prompt): array
     {
-        $url = Setting::getValue('ai.9router.url', config('meta-ads-image-generator.providers.9router.url'));
-        $apiKey = Setting::getValue('ai.9router.api_key', config('meta-ads-image-generator.providers.9router.api_key'));
+        $ai = Setting::aiConfig();
+        $url = $ai['url'];
+        $apiKey = $ai['api_key'];
         $model = 'cf/@cf/black-forest-labs/flux-1-schnell';
 
         if (!$url) {
-            throw new Exception("9Router URL is missing.");
+            throw new Exception("AI URL is missing.");
         }
 
         Log::info('9Router FLUX: generating image', ['prompt' => $prompt, 'model' => $model]);
@@ -97,13 +98,14 @@ class AiProviderManager
     {
         $apiKey = $this->providerCfg('openai', 'api_key');
         $model = $modelOverride ?: $this->providerCfg('openai', 'model');
+        $url = rtrim((string) $this->providerCfg('openai', 'url'), '/');
 
         if (!$apiKey) {
             throw new Exception("OpenAI API key is missing.");
         }
 
         $response = Http::withToken($apiKey)
-            ->post('https://api.openai.com/v1/images/generations', [
+            ->post("{$url}/images/generations", [
                 'model' => $model,
                 'prompt' => $prompt,
                 'n' => 1,
@@ -130,6 +132,7 @@ class AiProviderManager
     {
         $apiKey = $this->providerCfg('stability', 'api_key');
         $model = $modelOverride ?: $this->providerCfg('stability', 'model');
+        $url = rtrim((string) $this->providerCfg('stability', 'url'), '/');
 
         if (!$apiKey) {
             throw new Exception("Stability AI API key is missing.");
@@ -139,7 +142,7 @@ class AiProviderManager
             'Authorization' => "Bearer {$apiKey}",
             'Content-Type' => 'application/json',
             'Accept' => 'application/json',
-        ])->post("https://api.stability.ai/v1/generation/{$model}/text-to-image", [
+        ])->post("{$url}/generation/{$model}/text-to-image", [
             'text_prompts' => [
                 ['text' => $prompt, 'weight' => 1],
             ],

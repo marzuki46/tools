@@ -51,12 +51,13 @@ class ClusterStructureService
 
     protected function generateParentsWithChildren(string $topic, int $parentCount, int $childCount): array
     {
-        $url = Setting::getValue('ai.9router.url', config('agent-connector.ai.url'));
-        $apiKey = Setting::getValue('ai.9router.api_key', config('agent-connector.ai.api_key'));
-        $model = Setting::getValue('ai.9router.chat_model', config('agent-connector.ai.chat_model', 'openai/gpt-4o'));
+        $ai = Setting::aiConfig();
+        $url = $ai['url'];
+        $apiKey = $ai['api_key'];
+        $model = $ai['chat_model'];
 
         if (!$url) {
-            throw new Exception('9Router URL is not configured.');
+            throw new Exception('AI URL is not configured.');
         }
 
         $systemPrompt = <<<PROMPT

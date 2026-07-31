@@ -3,10 +3,12 @@
 return [
     'providers' => [
         'openai' => [
+            'url' => env('OPENAI_URL', 'https://api.openai.com/v1'),
             'api_key' => env('OPENAI_API_KEY'),
             'model' => env('META_ADS_OPENAI_MODEL', 'dall-e-3'),
         ],
         'stability' => [
+            'url' => env('STABILITY_URL', 'https://api.stability.ai/v1'),
             'api_key' => env('STABILITY_API_KEY'),
             'model' => env('META_ADS_STABILITY_MODEL', 'stable-diffusion-xl-1024-v1-0'),
         ],

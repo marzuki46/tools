@@ -20,12 +20,13 @@ class CopywritingService
 
     public function generateCopy(array $input, ?string $modelOverride = null): array
     {
-        $url = Setting::getValue('ai.9router.url', config('meta-ads-image-generator.providers.9router.url'));
-        $apiKey = Setting::getValue('ai.9router.api_key', config('meta-ads-image-generator.providers.9router.api_key'));
-        $model = $modelOverride ?: Setting::getValue('ai.9router.chat_model', config('meta-ads-image-generator.providers.9router.chat_model', 'openai/gpt-4o'));
+        $ai = Setting::aiConfig();
+        $url = $ai['url'];
+        $apiKey = $ai['api_key'];
+        $model = $modelOverride ?: $ai['chat_model'];
 
         if (!$url) {
-            throw new Exception('9Router URL is not configured for copywriting.');
+            throw new Exception('AI URL is not configured for copywriting.');
         }
 
         $systemPrompt = <<<PROMPT
@@ -87,7 +88,7 @@ PROMPT;
         ]);
 
         if ($response->failed()) {
-            Log::error('Copywriting 9Router Chat Failed', ['response' => $response->body()]);
+            Log::error('Copywriting AI Chat Failed', ['response' => $response->body()]);
             throw new Exception('Failed to generate copy: ' . $response->body());
         }
 

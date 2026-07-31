@@ -91,6 +91,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/api-guide', [AdminApiGuideController::class, 'index'])->name('api-guide');
         Route::get('/settings', [AdminSettingController::class, 'index'])->name('settings');
         Route::post('/settings', [AdminSettingController::class, 'update'])->name('settings.update');
+        Route::post('/settings/provider', [AdminSettingController::class, 'addProvider'])->name('settings.provider');
+        Route::post('/settings/provider/delete', [AdminSettingController::class, 'removeProvider'])->name('settings.provider.delete');
         Route::post('/settings/telegram-webhook', [AdminSettingController::class, 'setTelegramWebhook'])->name('settings.telegram-webhook');
         Route::get('/settings/telegram-webhook-info', [AdminSettingController::class, 'telegramWebhookInfo'])->name('settings.telegram-webhook-info');
 
