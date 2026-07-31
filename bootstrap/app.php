@@ -25,6 +25,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=300 --tries=3')
             ->everyMinute()
             ->withoutOverlapping();
+
+        $schedule->command('seo-cluster:run')
+            ->everyThirtyMinutes()
+            ->withoutOverlapping()
+            ->onOneServer();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

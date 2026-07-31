@@ -52,10 +52,12 @@ class AiProviderManager
 
         Log::info('9Router FLUX: generating image', ['prompt' => $prompt, 'model' => $model]);
 
+        $endpoint = str_ends_with(rtrim($url, '/'), '/v1') ? rtrim($url, '/') . '/images/generations' : rtrim($url, '/') . '/v1/images/generations';
+
         $response = Http::timeout(120)->withHeaders([
             'Authorization' => "Bearer {$apiKey}",
             'Content-Type' => 'application/json',
-        ])->post($url . '/v1/images/generations', [
+        ])->post($endpoint, [
             'model' => $model,
             'prompt' => $prompt,
             'size' => '1024x1024',

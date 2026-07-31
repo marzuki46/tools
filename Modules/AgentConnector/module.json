@@ -1,0 +1,11 @@
+{
+    "name": "AgentConnector",
+    "alias": "agentconnector",
+    "description": "Agent cerdas dengan RAG memory: intent analyzer, tool router, dan konteks percakapan multi-sesi",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\AgentConnector\\Providers\\AgentConnectorServiceProvider"
+    ],
+    "files": []
+}

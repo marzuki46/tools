@@ -1,5 +1,7 @@
 {
     "MetaAdsImageGenerator": true,
     "KeywordResearch": true,
-    "ContentGenerator": true
+    "ContentGenerator": true,
+    "SeoCluster": true,
+    "AgentConnector": true
 }

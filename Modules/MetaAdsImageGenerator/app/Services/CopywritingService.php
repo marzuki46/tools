@@ -71,10 +71,12 @@ PROMPT;
             $userPrompt .= "\nAdditional notes: {$input['notes']}";
         }
 
+        $endpoint = str_ends_with(rtrim($url, '/'), '/v1') ? rtrim($url, '/') . '/chat/completions' : rtrim($url, '/') . '/v1/chat/completions';
+
         $response = Http::timeout(30)->withHeaders([
             'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
             'Content-Type' => 'application/json',
-        ])->post("{$url}/v1/chat/completions", [
+        ])->post($endpoint, [
             'model' => $model,
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],

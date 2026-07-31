@@ -58,6 +58,22 @@ class ToolSeeder extends Seeder
                 'package_name' => null,
                 'is_active' => true,
             ],
+            [
+                'name' => 'Keyword Clusters',
+                'slug' => 'keyword-clusters',
+                'description' => 'Manajemen cluster keyword dengan otomasi riset, konten, gambar, dan publish otomatis ke WordPress.',
+                'icon' => 'cluster',
+                'package_name' => 'seo-cluster',
+                'is_active' => true,
+            ],
+            [
+                'name' => 'Content Analyzer',
+                'slug' => 'content-analyzer',
+                'description' => 'Analisa kualitas konten: SEO score, struktur artikel, readability, dan analisis gambar.',
+                'icon' => 'analyzer',
+                'package_name' => 'content-analyzer',
+                'is_active' => true,
+            ],
         ];
 
         foreach ($tools as $tool) {

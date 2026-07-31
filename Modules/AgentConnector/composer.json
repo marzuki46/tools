@@ -1,0 +1,28 @@
+{
+    "name": "nwidart/agentconnector",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\AgentConnector\\": "app/",
+            "Modules\\AgentConnector\\Database\\Factories\\": "database/factories/",
+            "Modules\\AgentConnector\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\AgentConnector\\Tests\\": "tests/"
+        }
+    }
+}

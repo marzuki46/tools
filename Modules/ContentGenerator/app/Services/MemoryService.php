@@ -158,18 +158,23 @@ class MemoryService
         try {
             $url = Setting::getValue('ai.9router.url', config('content-generator.providers.9router.url'));
             $apiKey = Setting::getValue('ai.9router.api_key', config('content-generator.providers.9router.api_key'));
+            $model = Setting::getValue('ai.9router.embedding_model', 'gemini/gemini-embedding-001');
 
             if (!$url || !$apiKey) {
                 return null;
             }
 
-            $response = Http::timeout(15)->withHeaders([
-                'Authorization' => "Bearer {$apiKey}",
-                'Content-Type' => 'application/json',
-            ])->post("{$url}/v1/embeddings", [
-                'model' => 'openai/text-embedding-3-small',
-                'input' => $text,
-            ]);
+            $endpoint = str_ends_with(rtrim($url, '/'), '/v1') ? rtrim($url, '/') . '/embeddings' : rtrim($url, '/') . '/v1/embeddings';
+
+            $response = Http::timeout(60)
+                ->connectTimeout(30)
+                ->withHeaders([
+                    'Authorization' => "Bearer {$apiKey}",
+                    'Content-Type' => 'application/json',
+                ])->post($endpoint, [
+                    'model' => $model,
+                    'input' => $text,
+                ]);
 
             if ($response->failed()) {
                 return null;

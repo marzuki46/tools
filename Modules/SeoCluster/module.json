@@ -1,0 +1,11 @@
+{
+    "name": "SeoCluster",
+    "alias": "seocluster",
+    "description": "Manajemen keyword cluster, otomasi riset-gambar-konten-publish ke WordPress, dan content analyzer",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\SeoCluster\\Providers\\SeoClusterServiceProvider"
+    ],
+    "files": []
+}

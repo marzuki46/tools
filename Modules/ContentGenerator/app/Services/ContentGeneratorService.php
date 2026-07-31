@@ -377,10 +377,9 @@ PROMPT;
             $prompt .= "\n\n---\nINSTRUKSI KUSTOM:\n{$customInstructions}";
         }
 
-        $response = Http::timeout(180)->withHeaders([
-            'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
-            'Content-Type' => 'application/json',
-        ])->post("{$url}/v1/chat/completions", [
+        $endpoint = str_ends_with(rtrim($url, '/'), '/v1') ? rtrim($url, '/') . '/chat/completions' : rtrim($url, '/') . '/v1/chat/completions';
+
+        $payload = [
             'model' => $model,
             'messages' => [
                 ['role' => 'system', 'content' => 'Anda adalah asisten penulis konten profesional. Selalu gunakan format Markdown untuk struktur artikel.'],
@@ -389,12 +388,39 @@ PROMPT;
             'temperature' => 0.7,
             'max_tokens' => 16384,
             'stream' => false,
-        ]);
+        ];
 
-        if ($response->failed()) {
+        $maxAttempts = 3;
+        $response = null;
+        $lastError = null;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $response = Http::timeout(300)
+                    ->connectTimeout(30)
+                    ->withHeaders([
+                        'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
+                        'Content-Type' => 'application/json',
+                    ])->post($endpoint, $payload);
+
+                if ($response->successful()) {
+                    break;
+                }
+
+                $lastError = new Exception('9Router HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 300));
+            } catch (\Throwable $e) {
+                $lastError = $e;
+            }
+
+            if ($attempt < $maxAttempts) {
+                Log::warning('ContentGenerator: retry callAI', ['attempt' => $attempt, 'error' => $lastError->getMessage()]);
+                sleep(5 * $attempt);
+            }
+        }
+
+        if (!$response || !$response->successful()) {
             Log::error('ContentGenerator AI Failed', [
-                'response' => $response->body(),
-                'status' => $response->status(),
+                'error' => $lastError?->getMessage(),
             ]);
             throw new Exception('Gagal memproses konten. Silakan coba lagi.');
         }

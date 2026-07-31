@@ -65,10 +65,7 @@ PROMPT;
             sleep($delay);
         }
 
-        $response = Http::timeout(60)->withHeaders([
-            'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
-            'Content-Type' => 'application/json',
-        ])->post("{$url}/chat/completions", [
+        $payload = [
             'model' => $model,
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],
@@ -77,12 +74,39 @@ PROMPT;
             'temperature' => 0.7,
             'max_tokens' => 8192,
             'stream' => false,
-        ]);
+        ];
 
-        if ($response->failed()) {
+        $maxAttempts = 3;
+        $response = null;
+        $lastError = null;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $response = Http::timeout(180)
+                    ->connectTimeout(30)
+                    ->withHeaders([
+                        'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
+                        'Content-Type' => 'application/json',
+                    ])->post("{$url}/chat/completions", $payload);
+
+                if ($response->successful()) {
+                    break;
+                }
+
+                $lastError = new Exception('9Router HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 300));
+            } catch (\Throwable $e) {
+                $lastError = $e;
+            }
+
+            if ($attempt < $maxAttempts) {
+                Log::warning('KeywordResearch: retry research', ['attempt' => $attempt, 'error' => $lastError->getMessage()]);
+                sleep(5 * $attempt);
+            }
+        }
+
+        if (!$response || !$response->successful()) {
             Log::error('KeywordResearch AI Failed', [
-                'response' => $response->body(),
-                'status' => $response->status(),
+                'error' => $lastError?->getMessage(),
             ]);
             throw new Exception('Gagal memproses riset keyword. Silakan coba lagi.');
         }

@@ -38,7 +38,13 @@
             "Modules\\KeywordResearch\\Database\\Seeders\\": "Modules/KeywordResearch/database/seeders/",
             "Modules\\ContentGenerator\\": "Modules/ContentGenerator/app/",
             "Modules\\ContentGenerator\\Database\\Factories\\": "Modules/ContentGenerator/database/factories/",
-            "Modules\\ContentGenerator\\Database\\Seeders\\": "Modules/ContentGenerator/database/seeders/"
+            "Modules\\ContentGenerator\\Database\\Seeders\\": "Modules/ContentGenerator/database/seeders/",
+            "Modules\\SeoCluster\\": "Modules/SeoCluster/app/",
+            "Modules\\SeoCluster\\Database\\Factories\\": "Modules/SeoCluster/database/factories/",
+            "Modules\\SeoCluster\\Database\\Seeders\\": "Modules/SeoCluster/database/seeders/",
+            "Modules\\AgentConnector\\": "Modules/AgentConnector/app/",
+            "Modules\\AgentConnector\\Database\\Factories\\": "Modules/AgentConnector/database/factories/",
+            "Modules\\AgentConnector\\Database\\Seeders\\": "Modules/AgentConnector/database/seeders/"
         }
     },
     "autoload-dev": {
