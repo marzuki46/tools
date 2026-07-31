@@ -3,49 +3,68 @@
 @section('title', 'Agent Connector')
 
 @section('content')
-<div class="container-fluid py-3">
-    <div class="row">
-        <div class="col-md-8">
-            <h4 class="mb-3">Agent Connector</h4>
-            <div class="card">
-                <div class="card-body" style="height: 500px; overflow-y: auto;" id="chatMessages">
-                    <div class="text-center text-muted py-5">
-                        <p class="mb-1">Selamat datang di Agent Connector!</p>
-                        <small>Saya bisa bantu kamu mengelola cluster keyword, riset, generate konten, analisa, dan publish.</small>
-                        <div class="mt-3">
-                            <span class="badge bg-light text-dark me-1 cursor-pointer" onclick="sendQuick('buat cluster')">buat cluster</span>
-                            <span class="badge bg-light text-dark me-1 cursor-pointer" onclick="sendQuick('cluster saya')">cluster saya</span>
-                            <span class="badge bg-light text-dark me-1 cursor-pointer" onclick="sendQuick('analisa konten')">analisa konten</span>
-                            <span class="badge bg-light text-dark cursor-pointer" onclick="sendQuick('bantuan')">bantuan</span>
-                        </div>
+<div class="grid grid-cols-3 gap-6">
+    <div class="col-span-2 flex flex-col">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+            <div class="border-b border-gray-200 px-5 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center text-white text-sm">🤖</div>
+                    <div>
+                        <h2 class="text-sm font-bold">Agent Connector</h2>
+                        <p class="text-xs text-gray-500">Asisten SEO otomatis untuk riset, konten, dan publish</p>
                     </div>
                 </div>
-                <div class="card-footer">
-                    <form id="chatForm" class="d-flex gap-2" onsubmit="return sendMessage(event)">
-                        <input type="text" id="messageInput" class="form-control" placeholder="Ketik pesan..." autofocus>
-                        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i></button>
-                    </form>
+                <span class="px-2.5 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700">Online</span>
+            </div>
+
+            <div id="chatMessages" class="flex-1 h-[520px] overflow-y-auto p-5 space-y-3 bg-gray-50">
+                <div class="text-center py-8">
+                    <p class="text-sm font-medium text-gray-700 mb-1">Selamat datang di Agent Connector!</p>
+                    <p class="text-xs text-gray-500">Saya bisa bantu kamu mengelola cluster keyword, riset, generate konten, analisa, dan publish.</p>
+                    <div class="mt-4 flex flex-wrap justify-center gap-2">
+                        <span class="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-full bg-white border border-gray-300 text-gray-700 hover:border-indigo-500 hover:text-indigo-600 transition" onclick="sendQuick('buat cluster')">buat cluster</span>
+                        <span class="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-full bg-white border border-gray-300 text-gray-700 hover:border-indigo-500 hover:text-indigo-600 transition" onclick="sendQuick('cluster saya')">cluster saya</span>
+                        <span class="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-full bg-white border border-gray-300 text-gray-700 hover:border-indigo-500 hover:text-indigo-600 transition" onclick="sendQuick('analisa konten')">analisa konten</span>
+                        <span class="cursor-pointer px-3 py-1.5 text-xs font-medium rounded-full bg-white border border-gray-300 text-gray-700 hover:border-indigo-500 hover:text-indigo-600 transition" onclick="sendQuick('bantuan')">bantuan</span>
+                    </div>
                 </div>
             </div>
+
+            <form id="chatForm" onsubmit="return sendMessage(event)" class="border-t border-gray-200 p-4 flex gap-3 bg-white">
+                <input type="text" id="messageInput" placeholder="Ketik pesan..." autofocus
+                    class="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                <button type="submit" class="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition flex items-center gap-2">
+                    Kirim
+                </button>
+            </form>
         </div>
-        <div class="col-md-4">
-            <div class="card mb-3">
-                <div class="card-header">Tool Tersedia</div>
-                <div class="card-body p-0" id="toolList">
-                    <div class="text-center text-muted py-3">Memuat...</div>
-                </div>
+    </div>
+
+    <div class="col-span-1">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-200">
+                <h3 class="text-sm font-bold">Tool Tersedia</h3>
+                <p class="text-xs text-gray-500">Terintegrasi dengan Agent Connector</p>
+            </div>
+            <div id="toolList" class="divide-y divide-gray-100">
+                <div class="p-5 text-center text-sm text-gray-500">Memuat...</div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
+function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function addMessage(text, isUser = false) {
     const div = document.createElement('div');
-    div.className = `d-flex mb-2 ${isUser ? 'justify-content-end' : ''}`;
+    div.className = `flex mb-1 ${isUser ? 'justify-end' : ''}`;
+    const safe = escapeHtml(text).replace(/\n/g, '<br>');
     div.innerHTML = `
-        <div class="${isUser ? 'bg-primary text-white' : 'bg-light'} rounded p-2" style="max-width: 80%;">
-            <small>${text.replace(/\n/g, '<br>')}</small>
+        <div class="${isUser ? 'bg-indigo-600 text-white' : 'bg-white border border-gray-200'} rounded-xl px-4 py-2.5 text-sm shadow-sm" style="max-width: 80%; white-space: pre-wrap;">
+            ${safe}
         </div>
     `;
     document.getElementById('chatMessages').appendChild(div);
@@ -62,10 +81,11 @@ async function sendMessage(e) {
     input.value = '';
 
     const typing = document.createElement('div');
-    typing.className = 'd-flex mb-2';
+    typing.className = 'flex';
     typing.id = 'typing';
-    typing.innerHTML = '<div class="bg-light rounded p-2"><small><em>Mengetik...</em></small></div>';
+    typing.innerHTML = '<div class="bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-500 shadow-sm"><em>Mengetik...</em></div>';
     document.getElementById('chatMessages').appendChild(typing);
+    document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
 
     try {
         const res = await fetch('{{ route('agentconnector.chat') }}', {
@@ -96,16 +116,19 @@ async function loadTools() {
         const list = document.getElementById('toolList');
         if (data.data?.length) {
             list.innerHTML = data.data.map(t =>
-                `<div class="border-bottom p-2 small">
-                    <strong>${t.name}</strong>
-                    <div class="text-muted">${t.description}</div>
+                `<div class="p-4">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500 flex-shrink-0"></span>
+                        <strong class="text-sm text-gray-800">${t.name}</strong>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1 ml-4">${t.description}</div>
                 </div>`
             ).join('');
         } else {
-            list.innerHTML = '<div class="text-center text-muted py-3">Sinkronisasi tool dulu</div>';
+            list.innerHTML = '<div class="p-5 text-center text-sm text-gray-500">Sinkronisasi tool dulu</div>';
         }
     } catch (e) {
-        document.getElementById('toolList').innerHTML = '<div class="text-center text-muted py-3">Gagal memuat</div>';
+        document.getElementById('toolList').innerHTML = '<div class="p-5 text-center text-sm text-gray-500">Gagal memuat</div>';
     }
 }
 loadTools();
