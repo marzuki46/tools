@@ -40,6 +40,39 @@ class SeoClusterController extends Controller
         return view('seocluster::create');
     }
 
+    public function generate(Request $request)
+    {
+        $validated = $request->validate([
+            'topic' => 'required|string|max:255',
+            'parent_count' => 'nullable|integer|min:1|max:10',
+            'child_count' => 'nullable|integer|min:1|max:15',
+        ]);
+
+        $structureService = app(\Modules\SeoCluster\Services\ClusterStructureService::class);
+
+        try {
+            $clusters = $structureService->generateStructure(
+                userId: auth()->id(),
+                topic: $validated['topic'],
+                parentCount: (int) ($validated['parent_count'] ?? 4),
+                childCount: (int) ($validated['child_count'] ?? 4),
+            );
+        } catch (\Exception $e) {
+            return redirect()->route('seocluster.create')
+                ->with('error', 'Gagal membuat cluster: ' . $e->getMessage());
+        }
+
+        if (empty($clusters)) {
+            return redirect()->route('seocluster.create')
+                ->with('error', 'AI tidak mengembalikan struktur cluster. Silakan coba lagi.');
+        }
+
+        $names = collect($clusters)->pluck('name')->implode(', ');
+
+        return redirect()->route('seocluster.index')
+            ->with('success', 'Berhasil membuat ' . count($clusters) . ' cluster dari topik "' . $validated['topic'] . '": ' . $names);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([

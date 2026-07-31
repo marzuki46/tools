@@ -9,6 +9,60 @@
         <p class="text-gray-500 text-sm mt-1">Analisa kualitas konten: SEO, struktur, readability, dan gambar</p>
     </div>
 
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="text-sm font-bold">Post dari Website WordPress</h3>
+            <button onclick="loadWpPosts()"
+                class="px-3 py-1.5 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-100 transition">
+                Muat Post
+            </button>
+        </div>
+        <div class="p-5">
+            <div id="wpPostList" class="space-y-2 max-h-72 overflow-y-auto">
+                <p class="text-sm text-gray-400">Klik "Muat Post" untuk mengambil daftar artikel yang sudah dipublish.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-200">
+            <h3 class="text-sm font-bold">Laporan Analisa Tersimpan</h3>
+        </div>
+        <div class="p-5">
+            <div id="reportList" class="space-y-2">
+                @forelse ($reports as $report)
+                    <div class="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 bg-gray-50">
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-gray-800 truncate">{{ $report->title }}</p>
+                            <p class="text-xs text-gray-500">
+                                Skor: <span class="font-semibold">{{ $report->total_score }}/100</span> ·
+                                Status: <span class="font-semibold">{{ $report->status }}</span>
+                                @if ($report->scheduled_at)
+                                    · Jadwal: {{ $report->scheduled_at->format('d M Y H:i') }}
+                                @endif
+                            </p>
+                            @if (!empty($report->issues))
+                                <ul class="mt-1.5 space-y-0.5">
+                                    @foreach (array_slice($report->issues, 0, 3) as $issue)
+                                        <li class="text-xs text-red-600 flex items-start gap-1"><span>⚠️</span>{{ $issue }}</li>
+                                    @endforeach
+                                </ul>
+                            @endif
+                        </div>
+                        @if ($report->status === 'needs_optimization')
+                            <button onclick="scheduleOptimization({{ $report->id }})"
+                                class="flex-shrink-0 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 transition">
+                                Jadwalkan Optimasi
+                            </button>
+                        @endif
+                    </div>
+                @empty
+                    <p class="text-sm text-gray-400">Belum ada laporan analisa.</p>
+                @endforelse
+            </div>
+        </div>
+    </div>
+
     <div class="grid grid-cols-2 gap-6 items-start">
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div class="px-5 py-4 border-b border-gray-200">
@@ -47,6 +101,101 @@
 </div>
 
 <script>
+const WP_POSTS_URL = '{{ route('agentconnector.wp-posts') }}';
+const ANALYZE_POST_URL = '{{ route('agentconnector.analyze-post') }}';
+const SCHEDULE_URL = '{{ route('agentconnector.schedule-optimization') }}';
+const CSRF = '{{ csrf_token() }}';
+
+async function api(url, body) {
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRF-TOKEN': CSRF, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(body || {})
+    });
+    return res.json();
+}
+
+async function loadWpPosts() {
+    const el = document.getElementById('wpPostList');
+    el.innerHTML = '<p class="text-sm text-gray-400">Memuat post dari WordPress...</p>';
+
+    const res = await fetch(WP_POSTS_URL, { headers: { 'Accept': 'application/json' } });
+    const data = await res.json();
+
+    if (!data.success) {
+        el.innerHTML = '<p class="text-sm text-red-600">' + (data.message || 'Gagal memuat post.') + '</p>';
+        return;
+    }
+
+    const posts = data.data || [];
+    if (!posts.length) {
+        el.innerHTML = '<p class="text-sm text-gray-400">Tidak ada post yang dipublish.</p>';
+        return;
+    }
+
+    el.innerHTML = posts.map(p => `
+        <div class="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition">
+            <div class="min-w-0">
+                <p class="text-sm font-medium text-gray-800 truncate">${p.title}</p>
+                <a href="${p.url}" target="_blank" class="text-xs text-indigo-600 hover:underline truncate block">${p.url}</a>
+            </div>
+            <div class="flex-shrink-0 flex items-center gap-2">
+                <input type="text" id="kw-${p.id}" placeholder="keyword (opsional)"
+                    class="w-36 px-2 py-1.5 rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <button onclick="analyzePost(${p.id})"
+                    class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-medium hover:bg-indigo-700 transition">
+                    Analisa
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function analyzePost(postId) {
+    const keyword = document.getElementById('kw-' + postId).value.trim();
+    document.getElementById('resultArea').innerHTML = '<div class="text-center py-12"><em class="text-sm text-gray-500">Menganalisa post dari WordPress...</em></div>';
+
+    const data = await api(ANALYZE_POST_URL, { wp_post_id: postId, keyword });
+
+    if (!data.success) {
+        document.getElementById('resultArea').innerHTML = '<div class="p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">' + (data.message || 'Gagal menganalisa post.') + '</div>';
+        return;
+    }
+
+    const d = data.data;
+    let html = '<div class="mb-4 p-4 rounded-xl bg-indigo-50 border border-indigo-100">';
+    html += '<p class="text-xs text-gray-500 font-medium">Post: <a class="text-indigo-600 hover:underline" target="_blank" href="' + (d.post && d.post.url ? d.post.url : '#') + '">' + (d.post && d.post.title ? d.post.title : '') + '</a></p>';
+    html += '</div>';
+    document.getElementById('resultArea').innerHTML = html + renderResultHtml(d);
+
+    if (d.total_score < 70) {
+        document.getElementById('resultArea').innerHTML += `
+            <div class="mt-4 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                <p class="text-sm text-amber-800 font-medium mb-2">Optimasi diperlukan (skor ${d.total_score}/100)</p>
+                <label class="block text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1.5">Jadwalkan Waktu Optimasi</label>
+                <input type="datetime-local" id="schedule-dt" class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm">
+                <button onclick="scheduleOptimization(${d.report_id})"
+                    class="mt-2 w-full bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 transition">
+                    Jadwalkan Optimasi
+                </button>
+            </div>`;
+    }
+}
+
+async function scheduleOptimization(reportId) {
+    const input = document.getElementById('schedule-dt');
+    if (input && !input.value) { alert('Pilih waktu optimasi terlebih dahulu.'); return; }
+    const scheduledAt = input ? input.value : prompt('Masukkan waktu jadwal (YYYY-MM-DDTHH:MM):');
+
+    const data = await api(SCHEDULE_URL, { report_id: reportId, scheduled_at: scheduledAt });
+    if (data.success) {
+        alert(data.message);
+        location.reload();
+    } else {
+        alert(data.message || 'Gagal menjadwalkan.');
+    }
+}
+
 async function analyze() {
     const content = document.getElementById('content').value.trim();
     const keyword = document.getElementById('keyword').value.trim();
@@ -68,6 +217,10 @@ async function analyze() {
 }
 
 function renderResult(d) {
+    document.getElementById('resultArea').innerHTML = renderResultHtml(d);
+}
+
+function renderResultHtml(d) {
     const det = d.details || {};
     const issues = d.issues || [];
 
@@ -156,7 +309,7 @@ function renderResult(d) {
         html += `</ul></div>`;
     }
 
-    document.getElementById('resultArea').innerHTML = html;
+    return html;
 }
 </script>
 @endsection

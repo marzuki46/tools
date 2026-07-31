@@ -22,14 +22,16 @@ class AgentConnectorService
         protected RagService $rag,
     ) {}
 
-    public function processInput(int $userId, string $input, string $source = 'telegram', ?string $sessionId = null): array
+    public function processInput(int $userId, string $input, string $source = 'telegram', ?string $sessionId = null, ?callable $onProgress = null): array
     {
         $this->ensureToolRegistrySynced();
         $sessionId ??= (string) $userId;
         $session = $this->getOrCreateSession($userId, $sessionId);
 
+        $this->reportProgress($onProgress, 'Mencari konteks & memory...');
         $memories = $this->retrieveMemories($userId, $input);
 
+        $this->reportProgress($onProgress, 'Menganalisis pesan...');
         $intentResult = $this->analyzeIntent($input, $memories, $session);
 
         $session->update([
@@ -46,6 +48,8 @@ class AgentConnectorService
         $actions = [];
 
         if (isset($intentResult['tool']) && $intentResult['tool'] !== 'none') {
+            $this->reportProgress($onProgress, 'Menjalankan tool: ' . $intentResult['tool'] . '...');
+
             $toolResult = $this->executeTool(
                 $intentResult['tool'],
                 $intentResult['action'] ?? '',
@@ -58,6 +62,8 @@ class AgentConnectorService
                 'tool' => $intentResult['tool'],
                 'intent' => $intentResult['intent'],
             ]);
+
+            $this->reportProgress($onProgress, 'Hasil tool ' . $intentResult['tool'] . ' siap.');
         }
 
         $this->saveMemory($userId, 'conversation', "conv.{$sessionId}." . now()->timestamp, $input, [
@@ -65,7 +71,16 @@ class AgentConnectorService
             'source' => $source,
         ]);
 
-        $response = $this->buildResponse($intentResult, $actions, $memories);
+        $this->reportProgress($onProgress, 'Menyusun jawaban...');
+        $response = $this->buildResponse($intentResult, $actions, $memories, $input);
+
+        $this->saveMemory($userId, 'conversation', "conv.{$sessionId}." . now()->timestamp . '.asst', $response, [
+            'intent' => $intentResult['intent'],
+            'source' => $source,
+            'role' => 'assistant',
+        ]);
+
+        $this->reportProgress($onProgress, 'Selesai');
 
         return [
             'response' => $response,
@@ -73,6 +88,17 @@ class AgentConnectorService
             'tool_called' => $intentResult['tool'] ?? null,
             'actions' => $actions,
         ];
+    }
+
+    protected function reportProgress(?callable $callback, string $stage): void
+    {
+        if ($callback) {
+            try {
+                $callback($stage);
+            } catch (Exception $e) {
+                Log::warning('AgentConnector: progress callback gagal', ['error' => $e->getMessage()]);
+            }
+        }
     }
 
     public function analyzeIntent(string $input, array $memories, AgentSession $session): array
@@ -91,9 +117,13 @@ class AgentConnectorService
 
         $sessionContext = $session->context ? json_encode($session->context) : 'Tidak ada sesi sebelumnya';
 
+        $productKnowledge = app(ProductKnowledgeService::class)->markdown();
+
         $systemPrompt = <<<PROMPT
 Anda adalah Agent Connector, asisten AI yang menjadi otak sistem SEO tools.
 Tugas Anda: pahami input user, baca konteks dari memory, dan pilih tool yang tepat.
+
+{$productKnowledge}
 
 TOOL YANG TERSEDIA:
 {$toolsDescription}
@@ -108,7 +138,8 @@ TUGAS:
 1. Analisis intent user dari input
 2. Jika input bersifat percakapan umum (sapaan, thanks, dll), pilih tool "none"
 3. Jika input meminta sesuatu yang bisa dikerjakan tool, pilih tool + action yang tepat
-4. Ekstrak parameter yang relevan dari input (keyword, id, dll)
+4. Ekstrak parameter yang relevan dari input (keyword, id, topic, parent_count, child_count, dll)
+5. Jika user menyebut "konten terakhir"/"artikel terakhir"/"konten saya", isi params generation_id dengan id generation terakhir user (kosongkan dulu, agent service yang mengisinya)
 
 RESPONSE: Hanya return JSON tanpa markdown:
 {
@@ -145,6 +176,10 @@ PROMPT;
     public function ruleBasedIntent(string $input): array
     {
         $input = mb_strtolower(trim($input));
+
+        if (preg_match('/(cara pakai|cara menggunakan|cara pemakaian|tutorial pakai|cara kerja)/i', $input) || preg_match('/\b(cara|bagaimana cara|gimana cara|gimana sih cara)\b.*\b(?:pakai|gunakan|tools|fitur|modul|sistem)\b/i', $input)) {
+            return ['intent' => 'help', 'tool' => 'none', 'action' => '', 'params' => [], 'confidence' => 0.92, 'reasoning' => 'Rule fallback: cara penggunaan'];
+        }
 
         if (preg_match('/(buat|tambah|create)\s+cluster|cluster\s+baru/i', $input)) {
             return ['intent' => 'create_cluster', 'tool' => 'keyword-clusters', 'action' => 'create', 'params' => $this->extractClusterParams($input), 'confidence' => 0.9, 'reasoning' => 'Rule fallback: membuat cluster'];
@@ -190,7 +225,7 @@ PROMPT;
             return ['intent' => 'help', 'tool' => 'none', 'action' => '', 'params' => [], 'confidence' => 0.95, 'reasoning' => 'Rule fallback: bantuan'];
         }
 
-        if (preg_match('/(hai|halo|hello|pagi|siang|sore|malam|terima kasih|thanks|thank)/i', $input)) {
+        if (preg_match('/(hai|halo|hello|pagi|siang|sore|malam|terima kasih|thanks|thank|makasih|makasi|mksh|mksd)/i', $input)) {
             return ['intent' => 'general_chat', 'tool' => 'none', 'action' => '', 'params' => [], 'confidence' => 0.9, 'reasoning' => 'Rule fallback: percakapan umum'];
         }
 
@@ -229,6 +264,28 @@ PROMPT;
 
         if (preg_match('/(?:nama|name)\s+["\']?([^"\',]+)["\']?/i', $input, $m)) {
             $params['name'] = trim($m[1]);
+        }
+
+        if (preg_match('/(\d+)\s*(?:parent|sub.?topik|kategori)/i', $input, $m)) {
+            $params['parent_count'] = (int) $m[1];
+        }
+
+        if (preg_match('/(\d+)\s*(?:child|keyword)\s*(?:per\s+parent)?/i', $input, $m)) {
+            $params['child_count'] = (int) $m[1];
+        }
+
+        $topic = null;
+        if (preg_match('/["\'«]([^"\'»]+)["\'»]/u', $input, $m)) {
+            $topic = trim($m[1]);
+        } elseif (preg_match('/(?:buat|tambah|create)\s+cluster(?:\s+baru)?\s+(?:dengan\s+)?(.+)$/i', $input, $m)) {
+            $topic = trim($m[1]);
+        }
+        if ($topic) {
+            $topic = preg_replace('/\s+(?:dengan|sebanyak)\s+\d+\s*(?:parent|child).*$/i', '', $topic);
+            $topic = trim($topic);
+            if (mb_strlen($topic) > 2 && !isset($params['parent_keyword'])) {
+                $params['topic'] = $topic;
+            }
         }
 
         return $params;
@@ -478,20 +535,14 @@ PROMPT;
         return $session;
     }
 
-    private function buildResponse(array $intent, array $actions, array $memories): string
+    private function buildResponse(array $intent, array $actions, array $memories, string $input): string
     {
         if ($intent['intent'] === 'help') {
-            $tools = $this->getToolRegistry();
-            $lines = collect($tools)->map(fn ($t) => "• {$t['name']} ({$t['slug']})")->implode("\n");
-
-            return "Saya bisa bantu dengan tool berikut:\n\n{$lines}\n\nContoh: \"buat cluster keyword seo lokal\", \"riset keyword 'seo lokal'\", \"generate konten tentang jasa seo\", \"analisa konten...\".";
+            return $this->buildHelpResponse();
         }
 
         if ($intent['intent'] === 'general_chat') {
-            return match (true) {
-                str_contains($intent['reasoning'] ?? '', 'sapa') => 'Halo! Ada yang bisa saya bantu untuk SEO konten Anda?',
-                default => 'Baik. Silakan sampaikan apa yang perlu saya kerjakan.',
-            };
+            return $this->buildNaturalChatResponse($input, $memories);
         }
 
         $response = '';
@@ -500,9 +551,12 @@ PROMPT;
             if ($action['status'] === 'error') {
                 $response .= "⚠️ " . ($action['message'] ?? 'Terjadi kesalahan') . "\n\n";
             } elseif (!empty($action['message'])) {
-                $response .= $action['message'] . "\n\n";
+                $response .= $action['message'] . "\n";
+                if (!empty($action['data'])) {
+                    $response .= $this->formatToolData($action['data']) . "\n";
+                }
             } elseif (!empty($action['data'])) {
-                $response .= json_encode($action['data'], JSON_PRETTY_PRINT) . "\n\n";
+                $response .= $this->formatToolData($action['data']) . "\n\n";
             }
         }
 
@@ -510,7 +564,53 @@ PROMPT;
             $response = ($intent['reasoning'] ?? 'Siap') . "\n\nGunakan perintah bantuan untuk lihat fitur.";
         }
 
-        return $response;
+        return trim($response);
+    }
+
+    private function buildHelpResponse(): string
+    {
+        $knowledge = app(ProductKnowledgeService::class);
+        $lines = ["Saya bisa bantu mengelola SEO konten Anda. Ini yang bisa saya kerjakan:\n"];
+
+        foreach ($knowledge->modules() as $m) {
+            $lines[] = "📦 {$m['name']} ({$m['slug']})";
+            $lines[] = "   {$m['what']}";
+            foreach (array_slice($m['actions'], 0, 3) as $a) {
+                $lines[] = "   • {$a['example']}";
+            }
+            $lines[] = '';
+        }
+
+        $lines[] = "🧩 Alur kerja umum:";
+        foreach ($knowledge->workflows()[0]['steps'] as $s) {
+            $lines[] = "   • {$s}";
+        }
+
+        return trim(implode("\n", $lines));
+    }
+
+    private function formatToolData(array $data): string
+    {
+        $lines = [];
+
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                $label = str_replace(['_', '-'], ' ', (string) $key);
+                $lines[] = "  • {$label}:";
+                foreach ($value as $item) {
+                    if (is_array($item)) {
+                        $lines[] = "    - " . implode(', ', array_map(fn ($v) => is_scalar($v) ? $v : json_encode($v), $item));
+                    } else {
+                        $lines[] = "    - {$item}";
+                    }
+                }
+            } else {
+                $label = str_replace(['_', '-'], ' ', (string) $key);
+                $lines[] = "  • {$label}: {$value}";
+            }
+        }
+
+        return implode("\n", $lines);
     }
 
     private function executeKeywordCluster(string $action, array $params, int $userId): array
@@ -539,8 +639,35 @@ PROMPT;
     private function createClusterFromParams($service, array $params, int $userId): string
     {
         $parent = $params['parent_keyword'] ?? $params['keyword'] ?? null;
+
+        if (!$parent && !empty($params['topic'])) {
+            try {
+                $structureService = app(\Modules\SeoCluster\Services\ClusterStructureService::class);
+                $parentCount = (int) ($params['parent_count'] ?? 4);
+                $childCount = (int) ($params['child_count'] ?? 4);
+
+                $clusters = $structureService->generateStructure(
+                    userId: $userId,
+                    topic: $params['topic'],
+                    parentCount: $parentCount,
+                    childCount: $childCount,
+                );
+
+                if (empty($clusters)) {
+                    return 'Gagal membuat cluster dari topik "' . $params['topic'] . '". Silakan coba lagi.';
+                }
+
+                $lines = collect($clusters)->map(fn ($c) => "• {$c->name} (#{$c->id}) — {$c->total_keywords} child keyword")->implode("\n");
+
+                return "Berhasil membuat {$parentCount} cluster dari topik \"{$params['topic']}\":\n\n{$lines}\n\nKetik \"aktifkan cluster\" untuk mulai memproses.";
+            } catch (Exception $e) {
+                Log::error('AgentConnector: generate cluster structure gagal', ['error' => $e->getMessage()]);
+                return 'Gagal membuat cluster: ' . $e->getMessage();
+            }
+        }
+
         if (!$parent) {
-            return 'Sertakan parent_keyword untuk membuat cluster.';
+            return 'Sertakan parent_keyword atau topik untuk membuat cluster. Contoh: "buat cluster belajar SEO website dengan 4 parent dan 5 child per parent".';
         }
 
         $keywords = $params['keywords'] ?? [];
@@ -669,6 +796,13 @@ PROMPT;
         ];
     }
 
+    private function latestGeneration(int $userId): ?ContentGeneration
+    {
+        return ContentGeneration::where('user_id', $userId)
+            ->orderBy('created_at', 'desc')
+            ->first();
+    }
+
     private function executeContentAnalyzer(string $action, array $params, int $userId): array
     {
         $content = $params['content'] ?? null;
@@ -678,7 +812,15 @@ PROMPT;
         }
 
         if (!$content) {
-            return ['message' => 'Sertakan content atau generation_id untuk dianalisa.'];
+            $generation = $this->latestGeneration($userId);
+            $content = $generation->phase_3_content ?? null;
+            if ($content) {
+                $params['generation_id'] = $generation->id;
+            }
+        }
+
+        if (!$content) {
+            return ['message' => 'Sertakan content atau generation_id untuk dianalisa. Contoh: "analisa konten: <teks>" atau "analisa konten terakhir saya".'];
         }
 
         $generator = app(\Modules\ContentGenerator\Services\ContentGeneratorService::class);
@@ -732,7 +874,15 @@ PROMPT;
         }
 
         if (!$content) {
-            return ['message' => 'Sertakan content atau generation_id untuk dipublish.'];
+            $generation = $this->latestGeneration($userId);
+            $content = $generation->phase_3_content ?? null;
+            if ($content) {
+                $params['generation_id'] = $generation->id;
+            }
+        }
+
+        if (!$content) {
+            return ['message' => 'Sertakan content atau generation_id untuk dipublish. Contoh: "publish konten terakhir saya" atau "publish konten: <teks>".'];
         }
 
         $wpUrl = Setting::getValue('seo-agent.wp.url', config('seo-cluster.wp.url', ''));
@@ -824,6 +974,43 @@ PROMPT;
         }
 
         return null;
+    }
+
+    private function buildNaturalChatResponse(string $input, array $memories): string
+    {
+        $memoryText = collect($memories)->map(fn ($m) => "[{$m['type']}] {$m['content']}")->implode("\n");
+
+        $productKnowledge = app(ProductKnowledgeService::class)->markdown();
+        $examples = app(ProductKnowledgeService::class)->examplesMarkdown();
+
+        $systemPrompt = <<<PROMPT
+Anda adalah Agent Connector, asisten AI yang menjadi otak sistem SEO tools.
+
+{$productKnowledge}
+
+{$examples}
+
+Tugas Anda sekarang: menjawab percakapan biasa secara natural, hangat, dan tidak kaku dalam bahasa Indonesia — seperti teman yang membantu, bukan robot.
+Panduan:
+- Balas sapaan, ucapan terima kasih, dan basa-basi dengan ramah dan singkat. Jangan langsung menawarkan daftar tool.
+- Jika user bertanya tentang kemampuan/fitur/cara pakai sistem, jelaskan ringkas berdasarkan panduan produk di atas, pakai bahasa manusiawi.
+- Gunakan konteks memory percakapan sebelumnya jika relevan.
+- Jangan menyebutkan istilah teknis (slug, action, params) kecuali user bertanya.
+- Jawaban singkat (1-3 kalimat), ramah, dan membantu.
+
+KONTEKS MEMORY PERCAKAPAN SEBELUMNYA:
+{$memoryText}
+PROMPT;
+
+        try {
+            $reply = trim($this->callAI($systemPrompt, $input));
+
+            return $reply !== '' ? $reply : 'Halo! Ada yang bisa saya bantu untuk SEO konten Anda?';
+        } catch (Exception $e) {
+            Log::warning('AgentConnector: natural chat AI gagal, pakai fallback', ['error' => $e->getMessage()]);
+
+            return 'Halo! Ada yang bisa saya bantu untuk SEO konten Anda?';
+        }
     }
 
     private function callAI(string $systemPrompt, string $userPrompt): string

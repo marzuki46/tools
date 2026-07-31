@@ -22,7 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule): void {
-        $schedule->command('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=300 --tries=3')
+        $schedule->command('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=620 --tries=3')
             ->everyMinute()
             ->withoutOverlapping();
 

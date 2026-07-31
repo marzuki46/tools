@@ -159,6 +159,21 @@ class WordPressService
         ], is_array($posts) ? $posts : []);
     }
 
+    public function getPostContent(int $postId): array
+    {
+        $post = $this->request('GET', "posts/{$postId}", [
+            '_fields' => 'id,link,title,content,slug',
+        ]);
+
+        return [
+            'id' => $post['id'] ?? $postId,
+            'title' => is_array($post['title'] ?? null) ? strip_tags($post['title']['rendered'] ?? '') : ($post['title'] ?? ''),
+            'slug' => $post['slug'] ?? '',
+            'url' => $post['link'] ?? '',
+            'content' => is_array($post['content'] ?? null) ? ($post['content']['rendered'] ?? '') : ($post['content'] ?? ''),
+        ];
+    }
+
     public function getCategories(): array
     {
         return $this->request('GET', 'categories', ['per_page' => 100, 'hide_empty' => false]);

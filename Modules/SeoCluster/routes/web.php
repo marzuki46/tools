@@ -10,6 +10,9 @@ Route::middleware(['web', 'auth'])->group(function () {
     Route::get('/keyword-clusters/create', [SeoClusterController::class, 'create'])
         ->name('seocluster.create');
 
+    Route::post('/keyword-clusters/generate', [SeoClusterController::class, 'generate'])
+        ->name('seocluster.generate');
+
     Route::post('/keyword-clusters', [SeoClusterController::class, 'store'])
         ->name('seocluster.store');
 
