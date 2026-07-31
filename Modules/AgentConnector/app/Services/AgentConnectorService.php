@@ -24,6 +24,7 @@ class AgentConnectorService
 
     public function processInput(int $userId, string $input, string $source = 'telegram', ?string $sessionId = null): array
     {
+        $this->ensureToolRegistrySynced();
         $sessionId ??= (string) $userId;
         $session = $this->getOrCreateSession($userId, $sessionId);
 
@@ -76,8 +77,14 @@ class AgentConnectorService
 
     public function analyzeIntent(string $input, array $memories, AgentSession $session): array
     {
+        $rule = $this->ruleBasedIntent($input);
+
+        if (($rule['confidence'] ?? 0) >= 0.85) {
+            return $rule;
+        }
+
         $tools = AgentToolRegistry::active()->get();
-        $toolsDescription = $tools->map(fn ($t) => "- {$t->name} ({$t->slug}): {$t->description}"
+        $toolsDescription = $tools->map(fn ($t) => "- {$t['name']} ({$t['slug']}): {$t['description']}"
             . $this->formatCapabilities($t->capabilities))->implode("\n");
 
         $memoryText = collect($memories)->map(fn ($m) => "[{$m['type']}] {$m['content']}")->implode("\n");
@@ -120,21 +127,111 @@ PROMPT;
 
         $userPrompt = "Input user: {$input}";
 
-        $raw = $this->callAI($systemPrompt, $userPrompt);
-        $decoded = $this->parseJson($raw);
+        try {
+            $raw = $this->callAI($systemPrompt, $userPrompt);
+            $decoded = $this->parseJson($raw);
+        } catch (Exception $e) {
+            Log::warning('AgentConnector: intent AI gagal, pakai fallback rule', ['error' => $e->getMessage()]);
+            $decoded = null;
+        }
 
         if (!$decoded || !isset($decoded['intent'])) {
-            return [
-                'intent' => 'general_chat',
-                'tool' => 'none',
-                'action' => '',
-                'params' => [],
-                'confidence' => 0.5,
-                'reasoning' => 'Gagal parse intent',
-            ];
+            return $this->ruleBasedIntent($input);
         }
 
         return $decoded;
+    }
+
+    public function ruleBasedIntent(string $input): array
+    {
+        $input = mb_strtolower(trim($input));
+
+        if (preg_match('/(buat|tambah|create)\s+cluster|cluster\s+baru/i', $input)) {
+            return ['intent' => 'create_cluster', 'tool' => 'keyword-clusters', 'action' => 'create', 'params' => $this->extractClusterParams($input), 'confidence' => 0.9, 'reasoning' => 'Rule fallback: membuat cluster'];
+        }
+
+        if (preg_match('/cluster\s+(saya|apa\s+saja|ku|list)/i', $input) || str_contains($input, 'daftar cluster')) {
+            return ['intent' => 'list_clusters', 'tool' => 'keyword-clusters', 'action' => 'list', 'params' => [], 'confidence' => 0.9, 'reasoning' => 'Rule fallback: daftar cluster'];
+        }
+
+        if (preg_match('/progress|status\s+cluster|perkembangan/i', $input)) {
+            return ['intent' => 'cluster_status', 'tool' => 'keyword-clusters', 'action' => 'status', 'params' => [], 'confidence' => 0.9, 'reasoning' => 'Rule fallback: status cluster'];
+        }
+
+        if (preg_match('/(mulai|aktifkan|start)\s+cluster/i', $input)) {
+            return ['intent' => 'start_cluster', 'tool' => 'keyword-clusters', 'action' => 'start', 'params' => $this->extractClusterParams($input), 'confidence' => 0.9, 'reasoning' => 'Rule fallback: mulai cluster'];
+        }
+
+        if (preg_match('/(berhenti|pause|stop)\s+cluster/i', $input)) {
+            return ['intent' => 'stop_cluster', 'tool' => 'keyword-clusters', 'action' => 'stop', 'params' => $this->extractClusterParams($input), 'confidence' => 0.9, 'reasoning' => 'Rule fallback: stop cluster'];
+        }
+
+        if (preg_match('/(tambah\s+keyword|add\s+keyword|keyword\s+ke\s+cluster)/i', $input)) {
+            return ['intent' => 'cluster_add_keyword', 'tool' => 'keyword-clusters', 'action' => 'add_keyword', 'params' => $this->extractClusterParams($input), 'confidence' => 0.85, 'reasoning' => 'Rule fallback: tambah keyword'];
+        }
+
+        if (preg_match('/(riset|research)\s+keyword/i', $input)) {
+            return ['intent' => 'research_keyword', 'tool' => 'keyword-research', 'action' => 'research', 'params' => $this->extractKeywordParams($input), 'confidence' => 0.9, 'reasoning' => 'Rule fallback: riset keyword'];
+        }
+
+        if (preg_match('/(generate|buat)\s+(konten|artikel|content)/i', $input)) {
+            return ['intent' => 'generate_content', 'tool' => 'content-generator', 'action' => 'generate', 'params' => $this->extractKeywordParams($input), 'confidence' => 0.9, 'reasoning' => 'Rule fallback: generate konten'];
+        }
+
+        if (preg_match('/(analisa|analisis|analy[sz]e)\s+(konten|content|artikel)/i', $input)) {
+            return ['intent' => 'analyze_content', 'tool' => 'content-analyzer', 'action' => 'analyze', 'params' => $this->extractKeywordParams($input), 'confidence' => 0.9, 'reasoning' => 'Rule fallback: analisa konten'];
+        }
+
+        if (preg_match('/(publish|posting|terbitkan)/i', $input)) {
+            return ['intent' => 'publish_content', 'tool' => 'wordpress-publisher', 'action' => 'publish', 'params' => $this->extractKeywordParams($input), 'confidence' => 0.85, 'reasoning' => 'Rule fallback: publish konten'];
+        }
+
+        if (preg_match('/(bantuan|help|fitur)/i', $input)) {
+            return ['intent' => 'help', 'tool' => 'none', 'action' => '', 'params' => [], 'confidence' => 0.95, 'reasoning' => 'Rule fallback: bantuan'];
+        }
+
+        if (preg_match('/(hai|halo|hello|pagi|siang|sore|malam|terima kasih|thanks|thank)/i', $input)) {
+            return ['intent' => 'general_chat', 'tool' => 'none', 'action' => '', 'params' => [], 'confidence' => 0.9, 'reasoning' => 'Rule fallback: percakapan umum'];
+        }
+
+        return ['intent' => 'general_chat', 'tool' => 'none', 'action' => '', 'params' => [], 'confidence' => 0.5, 'reasoning' => 'Rule fallback: tidak terdeteksi'];
+    }
+
+    protected function extractKeywordParams(string $input): array
+    {
+        if (preg_match('/["\'«]([^"\'»]+)["\'»]/u', $input, $m)) {
+            return ['keyword' => trim($m[1])];
+        }
+
+        if (preg_match('/(?:keyword|tentang|untuk|riset)\s+(.+)$/i', $input, $m)) {
+            $keyword = trim(preg_replace('/\s*(dan|tolong|saya\s+ingin|bisa|mohon)\s*$/i', '', $m[1]));
+            if (mb_strlen($keyword) > 2) {
+                return ['keyword' => $keyword];
+            }
+        }
+
+        return [];
+    }
+
+    protected function extractClusterParams(string $input): array
+    {
+        $params = [];
+
+        if (preg_match('/cluster\s+#?(\d+)/i', $input, $m)) {
+            $params['id'] = (int) $m[1];
+        }
+
+        if (preg_match('/["\'«]([^"\'»]+)["\'»]/u', $input, $m)) {
+            $params['parent_keyword'] = trim($m[1]);
+        } elseif (preg_match('/(?:keyword|tentang|untuk)\s+(.+)$/i', $input, $m)) {
+            $params['parent_keyword'] = trim($m[1]);
+        }
+
+        if (preg_match('/(?:nama|name)\s+["\']?([^"\',]+)["\']?/i', $input, $m)) {
+            $params['name'] = trim($m[1]);
+        }
+
+        return $params;
     }
 
     public function retrieveMemories(int $userId, string $input): array
@@ -248,7 +345,105 @@ PROMPT;
 
     public function getToolRegistry(): array
     {
+        $this->ensureToolRegistrySynced();
+
         return AgentToolRegistry::active()->get()->toArray();
+    }
+
+    public function syncToolRegistry(): int
+    {
+        $tools = $this->defaultTools();
+
+        foreach ($tools as $tool) {
+            AgentToolRegistry::updateOrCreate(
+                ['slug' => $tool['slug']],
+                $tool,
+            );
+        }
+
+        return count($tools);
+    }
+
+    protected function ensureToolRegistrySynced(): void
+    {
+        if (!AgentToolRegistry::exists()) {
+            $this->syncToolRegistry();
+        }
+    }
+
+    protected function defaultTools(): array
+    {
+        return [
+            [
+                'name' => 'Keyword Clusters',
+                'slug' => 'keyword-clusters',
+                'description' => 'Manage keyword clusters, track progress, auto-process keywords untuk konten otomatis',
+                'capabilities' => [
+                    ['action' => 'list', 'description' => 'Lihat semua cluster'],
+                    ['action' => 'create', 'description' => 'Buat cluster baru dengan daftar keyword'],
+                    ['action' => 'detail', 'description' => 'Lihat detail cluster termasuk progress'],
+                    ['action' => 'start', 'description' => 'Mulai otomasi cluster'],
+                    ['action' => 'stop', 'description' => 'Hentikan otomasi cluster'],
+                    ['action' => 'add_keyword', 'description' => 'Tambah keyword ke cluster'],
+                    ['action' => 'status', 'description' => 'Progress cluster'],
+                ],
+                'order' => 1,
+            ],
+            [
+                'name' => 'Keyword Research',
+                'slug' => 'keyword-research',
+                'description' => 'Riset LSI keywords dan entities dari target keyword menggunakan AI',
+                'capabilities' => [
+                    ['action' => 'research', 'description' => 'Riset keyword, return LSI keywords + entities', 'params' => ['keyword' => 'string', 'locale' => 'string']],
+                ],
+                'order' => 2,
+            ],
+            [
+                'name' => 'Content Generator',
+                'slug' => 'content-generator',
+                'description' => 'Generate artikel 3-phase (draft konten, critical questions, final artikel)',
+                'capabilities' => [
+                    ['action' => 'generate', 'description' => 'Generate artikel dari keyword', 'params' => ['keyword', 'tone', 'locale', 'lsi_keywords', 'entities']],
+                ],
+                'order' => 3,
+            ],
+            [
+                'name' => 'Content Analyzer',
+                'slug' => 'content-analyzer',
+                'description' => 'Analisa kualitas konten: SEO score, struktur artikel, readability, dan analisis gambar',
+                'capabilities' => [
+                    ['action' => 'analyze', 'description' => 'Analisa konten', 'params' => ['content' => 'text', 'keyword' => 'string']],
+                ],
+                'order' => 4,
+            ],
+            [
+                'name' => 'WordPress Publisher',
+                'slug' => 'wordpress-publisher',
+                'description' => 'Publish artikel dan upload gambar ke WordPress via REST API',
+                'capabilities' => [
+                    ['action' => 'publish', 'description' => 'Post artikel ke WordPress'],
+                ],
+                'order' => 5,
+            ],
+            [
+                'name' => 'Image Fetcher',
+                'slug' => 'image-fetcher',
+                'description' => 'Cari gambar dari DuckDuckGo/Bing/Google dan upload ke WordPress',
+                'capabilities' => [
+                    ['action' => 'search', 'description' => 'Cari & tampilkan gambar', 'params' => ['keyword' => 'string', 'count' => 'int', 'source' => 'string']],
+                ],
+                'order' => 6,
+            ],
+            [
+                'name' => 'Google Trends',
+                'slug' => 'google-trends',
+                'description' => 'Cek tren keyword di Google (butuh integrasi eksternal)',
+                'capabilities' => [
+                    ['action' => 'trend', 'description' => 'Cek tren keyword'],
+                ],
+                'order' => 7,
+            ],
+        ];
     }
 
     public function buildSystemPrompt(): string
@@ -285,6 +480,13 @@ PROMPT;
 
     private function buildResponse(array $intent, array $actions, array $memories): string
     {
+        if ($intent['intent'] === 'help') {
+            $tools = $this->getToolRegistry();
+            $lines = collect($tools)->map(fn ($t) => "• {$t['name']} ({$t['slug']})")->implode("\n");
+
+            return "Saya bisa bantu dengan tool berikut:\n\n{$lines}\n\nContoh: \"buat cluster keyword seo lokal\", \"riset keyword 'seo lokal'\", \"generate konten tentang jasa seo\", \"analisa konten...\".";
+        }
+
         if ($intent['intent'] === 'general_chat') {
             return match (true) {
                 str_contains($intent['reasoning'] ?? '', 'sapa') => 'Halo! Ada yang bisa saya bantu untuk SEO konten Anda?',
@@ -636,33 +838,47 @@ PROMPT;
 
         $endpoint = str_ends_with(rtrim($url, '/'), '/v1') ? rtrim($url, '/') . '/chat/completions' : rtrim($url, '/') . '/v1/chat/completions';
 
-        $response = Http::timeout(60)->withHeaders([
-            'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
-            'Content-Type' => 'application/json',
-        ])->post($endpoint, [
-            'model' => $model,
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user', 'content' => $userPrompt],
-            ],
-            'temperature' => 0.3,
-            'max_tokens' => 2048,
-            'stream' => false,
-        ]);
+        $maxAttempts = 2;
+        $lastError = null;
 
-        if ($response->failed()) {
-            Log::error('AgentConnector AI Failed', [
-                'response' => $response->body(),
-                'status' => $response->status(),
-            ]);
-            throw new Exception('Gagal terhubung ke AI. Silakan coba lagi.');
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $response = Http::timeout(60)
+                    ->connectTimeout(30)
+                    ->withHeaders([
+                        'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
+                        'Content-Type' => 'application/json',
+                    ])->post($endpoint, [
+                        'model' => $model,
+                        'messages' => [
+                            ['role' => 'system', 'content' => $systemPrompt],
+                            ['role' => 'user', 'content' => $userPrompt],
+                        ],
+                        'temperature' => 0.3,
+                        'max_tokens' => 2048,
+                        'stream' => false,
+                    ]);
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    $usage = $data['usage'] ?? [];
+                    $this->tokenUsage['tokens_in'] += $usage['prompt_tokens'] ?? 0;
+                    $this->tokenUsage['tokens_out'] += $usage['completion_tokens'] ?? 0;
+
+                    return $data['choices'][0]['message']['content'] ?? '';
+                }
+
+                $lastError = new Exception('AI HTTP ' . $response->status() . ': ' . mb_substr($response->body(), 0, 300));
+            } catch (Exception $e) {
+                $lastError = $e;
+            }
+
+            if ($attempt < $maxAttempts) {
+                Log::warning('AgentConnector: retry callAI', ['attempt' => $attempt, 'error' => $lastError->getMessage()]);
+                sleep(2);
+            }
         }
 
-        $data = $response->json();
-        $usage = $data['usage'] ?? [];
-        $this->tokenUsage['tokens_in'] += $usage['prompt_tokens'] ?? 0;
-        $this->tokenUsage['tokens_out'] += $usage['completion_tokens'] ?? 0;
-
-        return $data['choices'][0]['message']['content'] ?? '';
+        throw $lastError ?? new Exception('Gagal terhubung ke AI.');
     }
 }

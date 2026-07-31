@@ -33,6 +33,21 @@
                     <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">POST /api/v1/tool/content-generator/generate</code><br><code class="bg-gray-100 px-1 rounded text-xs">POST /api/v1/tool/content-generator/status</code></td>
                 </tr>
                 <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium">Keyword Clusters</td>
+                    <td class="py-2 font-mono text-xs">keyword-clusters</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">Web UI /keyword-clusters</code><br><code class="bg-gray-100 px-1 rounded text-xs">Command: seo-cluster:run</code></td>
+                </tr>
+                <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium">Content Analyzer</td>
+                    <td class="py-2 font-mono text-xs">content-analyzer</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">POST /api/agent-connector/chat</code> (via Agent)<br><code class="bg-gray-100 px-1 rounded text-xs">Web UI /content-analyzer</code></td>
+                </tr>
+                <tr class="border-b border-gray-100">
+                    <td class="py-2 font-medium">Agent Connector</td>
+                    <td class="py-2 font-mono text-xs">agent-connector</td>
+                    <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">POST /api/agent-connector/chat</code><br><code class="bg-gray-100 px-1 rounded text-xs">GET /api/agent-connector/tools</code></td>
+                </tr>
+                <tr class="border-b border-gray-100">
                     <td class="py-2 font-medium">Meta Title & Description</td>
                     <td class="py-2 font-mono text-xs">meta-generator</td>
                     <td class="py-2"><code class="bg-gray-100 px-1 rounded text-xs">Otomatis (Phase 4) / POST .../generate-meta</code></td>
@@ -440,9 +455,129 @@ Content-Type: application/json
 X-API-Key: juki_{key}</pre>
     </div>
 
+    {{-- Keyword Clusters --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">7. Keyword Clusters (Otomasi Konten)</h2>
+        <p class="text-sm text-gray-600 mb-3">Kelompokkan keyword ke dalam cluster yang diolah otomatis: riset keyword → generate konten → ambil gambar → publish ke WordPress, sesuai jadwal. Alur ini dijalankan oleh <code class="bg-gray-100 px-1 rounded">AutoClusterAgent</code>.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-green-700 uppercase tracking-wider">Alur Otomasi per Keyword</p>
+                <ol class="text-sm text-green-700 mt-2 space-y-1 list-decimal list-inside">
+                    <li>Riset keyword (LSI + entities)</li>
+                    <li>Generate konten 3-phase</li>
+                    <li>Analisa kualitas konten (analisa)</li>
+                    <li>Ambil & upload gambar ke WordPress</li>
+                    <li>Publish artikel ke WordPress</li>
+                    <li>Ping Google/Bing/IndexNow</li>
+                </ol>
+            </div>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p class="text-xs font-semibold text-blue-700 uppercase tracking-wider">Status Keyword</p>
+                <ul class="text-sm text-blue-700 mt-2 space-y-1 list-disc list-inside">
+                    <li><code class="bg-white px-1 rounded">pending</code> — menunggu diproses</li>
+                    <li><code class="bg-white px-1 rounded">processing</code> — sedang diproses</li>
+                    <li><code class="bg-white px-1 rounded">completed</code> — selesai & published</li>
+                    <li><code class="bg-white px-1 rounded">failed</code> — gagal (max 3× retry)</li>
+                </ul>
+            </div>
+        </div>
+
+        <h3 class="font-semibold text-sm mb-2">Web UI</h3>
+        <p class="text-sm text-gray-600 mb-3">Buka <a href="{{ route('seocluster.index') }}" class="text-indigo-600 underline">Keyword Clusters</a> (URL <code class="bg-gray-100 px-1 rounded">/keyword-clusters</code>). Dari sini Anda bisa: buat cluster (nama + parent keyword + daftar keyword), aktifkan/pause otomasi, tambah/hapus keyword, dan lihat progress tiap keyword.</p>
+
+        <h3 class="font-semibold text-sm mb-2">Cron / Scheduler</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3"># Jalankan manual satu siklus:
+ea-php84 artisan seo-cluster:run
+
+# Otomatis: sudah terdaftar di scheduler (bootstrap/app.php) tiap 30 menit
+ea-php84 artisan schedule:run</pre>
+
+        <h3 class="font-semibold text-sm mb-2">Koneksi WordPress</h3>
+        <p class="text-sm text-gray-600 mb-3">Otomasi publish memerlukan konfigurasi WP di halaman <a href="{{ route('admin.settings') }}" class="text-indigo-600 underline">AI Settings</a> (key <code class="bg-gray-100 px-1 rounded">seo-agent.wp.url</code>, <code class="bg-gray-100 px-1 rounded">username</code>, <code class="bg-gray-100 px-1 rounded">password</code> / App Password). Gambar dicari dari Bing/DuckDuckGo dan di-convert ke WebP.</p>
+    </div>
+
+    {{-- Content Analyzer --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">8. Content Analyzer</h2>
+        <p class="text-sm text-gray-600 mb-3">Analisa kualitas konten artikel: skor SEO, struktur heading, readability, kata, paragraf, gambar, dan link — dengan saran perbaikan.</p>
+
+        <h3 class="font-semibold text-sm mb-2">Web UI</h3>
+        <p class="text-sm text-gray-600 mb-3">Buka <a href="{{ route('agentconnector.analyzer') }}" class="text-indigo-600 underline">Content Analyzer</a> (URL <code class="bg-gray-100 px-1 rounded">/content-analyzer</code>). Tempel konten HTML lalu klik Analisa.</p>
+
+        <h3 class="font-semibold text-sm mb-2">Output Analisa</h3>
+        <table class="w-full text-sm mb-4">
+            <thead>
+                <tr class="border-b border-gray-200">
+                    <th class="text-left py-2 font-medium text-gray-600">Metrik</th>
+                    <th class="text-left py-2 font-medium text-gray-600">Keterangan</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs font-medium">seo_score</td><td class="py-2">Skor 0-100 (keyword di title/meta/heading, kepadatan, struktur)</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs font-medium">readability</td><td class="py-2">Skor keterbacaan 0-100</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs font-medium">word_count</td><td class="py-2">Jumlah kata</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs font-medium">headings / paragraphs / images / links</td><td class="py-2">Hitung struktur HTML</td></tr>
+                <tr><td class="py-2 font-mono text-xs font-medium">suggestions</td><td class="py-2">Daftar saran perbaikan</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    {{-- Agent Connector --}}
+    <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h2 class="text-lg font-bold mb-4">9. Agent Connector (Chat AI)</h2>
+        <p class="text-sm text-gray-600 mb-3">Asisten AI satu pintu untuk semua tool: memahami perintah bahasa alami, memilih tool yang tepat, dan mengeksekusinya. Dilengkapi memori (RAG via embedding 9Router) agar konteks antar percakapan tetap terjaga.</p>
+
+        <h3 class="font-semibold text-sm mb-2">Web UI Chat</h3>
+        <p class="text-sm text-gray-600 mb-3">Buka <a href="{{ route('agentconnector.index') }}" class="text-indigo-600 underline">Agent Connector</a> (URL <code class="bg-gray-100 px-1 rounded">/agent-connector</code>). Contoh perintah:</p>
+        <ul class="list-disc list-inside text-sm text-gray-600 space-y-1 mb-4">
+            <li><code class="bg-gray-100 px-1 rounded">buat cluster keyword seo lokal</code> → membuat cluster</li>
+            <li><code class="bg-gray-100 px-1 rounded">cluster saya</code> → daftar cluster</li>
+            <li><code class="bg-gray-100 px-1 rounded">riset keyword "seo lokal"</code> → keyword research</li>
+            <li><code class="bg-gray-100 px-1 rounded">generate konten tentang jasa seo</code> → content generator</li>
+            <li><code class="bg-gray-100 px-1 rounded">analisa konten ...</code> → content analyzer</li>
+            <li><code class="bg-gray-100 px-1 rounded">bantuan</code> → daftar tool tersedia</li>
+        </ul>
+
+        <h3 class="font-semibold text-sm mb-2">API Chat</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">POST /api/agent-connector/chat
+Authorization: Bearer {sanctum_token}
+Content-Type: application/json
+
+{ "message": "riset keyword seo lokal", "session_id": "telegram-123" }
+
+Response:
+{
+  "response": "Riset keyword 'seo lokal' selesai. Ditemukan 12 LSI keywords dan 7 entities.",
+  "intent": "research_keyword",
+  "tool_called": "keyword-research",
+  "actions": [ { "tool": "keyword-research", "status": "ok", ... } ]
+}</pre>
+
+        <h3 class="font-semibold text-sm mb-2">Tool Registry & Memori</h3>
+        <table class="w-full text-sm mb-4">
+            <thead>
+                <tr class="border-b border-gray-200">
+                    <th class="text-left py-2 font-medium text-gray-600">Endpoint</th>
+                    <th class="text-left py-2 font-medium text-gray-600">Fungsi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">GET /api/agent-connector/tools</td><td class="py-2">Daftar tool yang dikenali agent</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">POST /api/agent-connector/tools/sync</td><td class="py-2">Sinkronisasi registri tool ke database (panggil sekali setelah deploy/migrate)</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">GET /api/agent-connector/memories</td><td class="py-2">Lihat memori percakapan user</td></tr>
+            </tbody>
+        </table>
+
+        <div class="bg-green-50 border border-green-200 p-4 rounded-lg">
+            <p class="text-sm text-green-800 font-medium">Auto-sync otomatis:</p>
+            <p class="text-sm text-green-700 mt-1">Registri tool langsung terisi otomatis saat pertama kali agent digunakan (tabel <code class="bg-green-100 px-1 rounded">agent_tool_registries</code>). Manual sync via <code class="bg-green-100 px-1 rounded">POST /api/agent-connector/tools/sync</code> juga tersedia jika perlu refresh.</p>
+        </div>
+    </div>
+
     {{-- Sistem Memori & Feedback --}}
     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <h2 class="text-lg font-bold mb-4">7. Sistem Memori & Feedback</h2>
+        <h2 class="text-lg font-bold mb-4">10. Sistem Memori & Feedback</h2>
         <p class="text-sm text-gray-600 mb-3">Setiap artikel yang berhasil digenerate disimpan sebagai memori. Sistem belajar dari konten terbaik untuk generasi berikutnya.</p>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -480,7 +615,7 @@ X-API-Key: juki_{key}</pre>
 
     {{-- Schema Markup Generator --}}
     <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <h2 class="text-lg font-bold mb-4">8. Schema Markup Generator</h2>
+        <h2 class="text-lg font-bold mb-4">11. Schema Markup Generator</h2>
         <p class="text-sm text-gray-600 mb-3">Buat JSON-LD schema.org untuk 10 tipe konten: Article, FAQPage, Product, LocalBusiness, BreadcrumbList, Review, Recipe, VideoObject, HowTo, Event. Bisa auto-fill dari konten Content Generator yang sudah selesai, dilengkapi AI enhancement.</p>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -551,7 +686,7 @@ X-API-Key: juki_{key}</pre>
 
     {{-- Tips --}}
     <div class="bg-indigo-50 border border-indigo-200 p-6 rounded-xl">
-        <h2 class="text-lg font-bold mb-3 text-indigo-800">9. Tips Penggunaan</h2>
+        <h2 class="text-lg font-bold mb-3 text-indigo-800">12. Tips Penggunaan</h2>
         <ul class="space-y-2 text-sm text-indigo-700">
             <li><strong>Pipeline otomatis (lengkap):</strong> Keyword Research → Content Generator → Meta SEO → Schema Markup — semua dalam 1 script. Mulai dari riset keyword hingga schema Article siap pakai. Lihat contoh shell script di section #0.</li>
             <li><strong>Queue worker:</strong> Tidak perlu manual — auto-start saat ada konten baru. Cek status lampu di dashboard.</li>

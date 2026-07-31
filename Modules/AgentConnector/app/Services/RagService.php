@@ -29,6 +29,46 @@ class RagService
         return $embedding;
     }
 
+    protected function getCachedEmbedding(string $text): ?array
+    {
+        $cached = cache()->get('rag_embed_' . md5($text));
+
+        return is_array($cached) ? $cached : null;
+    }
+
+    protected function keywordFallback(int $userId, string $query, int $limit = 5): array
+    {
+        $words = array_filter(array_map('trim', explode(' ', $query)));
+
+        if (empty($words)) {
+            return [];
+        }
+
+        return AgentMemory::where('user_id', $userId)
+            ->where(function ($q) use ($words) {
+                foreach ($words as $word) {
+                    if (mb_strlen($word) > 3) {
+                        $q->orWhere('content', 'like', "%{$word}%");
+                    }
+                }
+            })
+            ->orderBy('updated_at', 'desc')
+            ->take($limit * 2)
+            ->get()
+            ->unique('key')
+            ->take($limit)
+            ->map(fn ($m) => [
+                'id' => $m->id,
+                'type' => $m->type,
+                'key' => $m->key,
+                'content' => Str::limit($m->content, 500),
+                'metadata' => $m->metadata,
+                'score' => 0,
+            ])
+            ->values()
+            ->toArray();
+    }
+
     protected function fetchEmbedding(string $text): ?array
     {
         $url = Setting::getValue('ai.9router.url', config('agent-connector.ai.url'));
@@ -120,10 +160,10 @@ class RagService
 
     public function semanticSearch(int $userId, string $query, int $limit = 5, float $minScore = 0.6): array
     {
-        $queryEmbedding = $this->embedText($query);
+        $queryEmbedding = $this->getCachedEmbedding($query);
 
         if (!$queryEmbedding) {
-            return [];
+            return $this->keywordFallback($userId, $query, $limit);
         }
 
         $candidates = AgentMemory::where('user_id', $userId)

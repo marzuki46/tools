@@ -69,6 +69,24 @@
                     <span>📝</span> Content Generator
                 </a>
             @endif
+            @if (\Illuminate\Support\Facades\Auth::user()->hasToolAccess('keyword-clusters'))
+                <a href="{{ route('seocluster.index') }}"
+                   class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('seocluster.*') ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800' }} transition">
+                    <span>🗂️</span> Keyword Clusters
+                </a>
+            @endif
+            @if (\Illuminate\Support\Facades\Auth::user()->hasToolAccess('content-analyzer'))
+                <a href="{{ route('agentconnector.analyzer') }}"
+                   class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('agentconnector.analyzer') ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800' }} transition">
+                    <span>📊</span> Content Analyzer
+                </a>
+            @endif
+            @if (\Illuminate\Support\Facades\Auth::user()->hasToolAccess('agent-connector'))
+                <a href="{{ route('agentconnector.index') }}"
+                   class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('agentconnector.index') ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800' }} transition">
+                    <span>🤖</span> Agent Connector
+                </a>
+            @endif
             <a href="{{ route('business-profiles.index') }}"
                class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium {{ request()->routeIs('business-profiles.*') ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800' }} transition">
                 <span>🏢</span> Profil Bisnis

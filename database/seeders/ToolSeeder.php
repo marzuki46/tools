@@ -74,6 +74,14 @@ class ToolSeeder extends Seeder
                 'package_name' => 'content-analyzer',
                 'is_active' => true,
             ],
+            [
+                'name' => 'Agent Connector',
+                'slug' => 'agent-connector',
+                'description' => 'Chat dengan AI agent untuk mengelola cluster, riset, generate, analisa, dan publish otomatis.',
+                'icon' => 'agent',
+                'package_name' => 'agent-connector',
+                'is_active' => true,
+            ],
         ];
 
         foreach ($tools as $tool) {

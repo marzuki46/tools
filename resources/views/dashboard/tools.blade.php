@@ -77,6 +77,27 @@
                         </a>
                     </div>
                 @endif
+                @if ($enabled && $tool->slug === 'keyword-clusters')
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <a href="{{ route('seocluster.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                            Open Keyword Clusters &rarr;
+                        </a>
+                    </div>
+                @endif
+                @if ($enabled && $tool->slug === 'content-analyzer')
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <a href="{{ route('agentconnector.analyzer') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                            Open Content Analyzer &rarr;
+                        </a>
+                    </div>
+                @endif
+                @if ($enabled && $tool->slug === 'agent-connector')
+                    <div class="mt-4 pt-4 border-t border-gray-100">
+                        <a href="{{ route('agentconnector.index') }}" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                            Open Agent Connector &rarr;
+                        </a>
+                    </div>
+                @endif
                 @if (!$enabled && $tool->is_active)
                     <div class="mt-3 pt-3 border-t border-gray-100">
                         <p class="text-xs text-gray-400">Tool ini belum aktif. Hubungi admin untuk aktivasi.</p>
