@@ -49,7 +49,7 @@ Route::prefix('v1')->middleware(['api-key'])->group(function () {
     });
 
     // Centralized tool API - dispatches to the appropriate module
-    Route::middleware('throttle:20,1')->group(function () {
+    Route::middleware('throttle:60,1')->group(function () {
         Route::post('/tool/{tool}/{action}', [\App\Http\Controllers\Api\ToolApiController::class, 'execute']);
     });
 
