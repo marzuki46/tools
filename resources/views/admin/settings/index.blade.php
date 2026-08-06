@@ -46,7 +46,7 @@
     $activeTab = request()->query('tab', 'general');
     $activeProviders = [];
     foreach ($providers as $provider) {
-        $val = Setting::getValue("ai.{$provider}.is_active", false);
+        $val = \App\Models\Setting::getValue("ai.{$provider}.is_active", false);
         $activeProviders[$provider] = $val === true || $val === 'true';
     }
 @endphp
