@@ -53,7 +53,8 @@ class ContentGeneratorService
     public function generatePhase3(string $phase1Content, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = []): string
     {
         $plainText = strip_tags($phase1Content);
-        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $locale, $tone, $lsiKeywords, $entities);
+        $effectiveLocale = $locale === 'auto' ? $this->detectLanguage($plainText) : $locale;
+        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities);
         return $this->processContent($this->callAI($prompt));
     }
 
@@ -308,13 +309,14 @@ PROMPT;
     public function generateMetaData(string $phase3Content, string $keyword, string $locale = 'id'): array
     {
         $plainText = strip_tags($phase3Content);
+        $effectiveLocale = $locale === 'auto' ? $this->detectLanguage($plainText) : $locale;
         $preview = mb_substr($plainText, 0, 3000);
 
         $prompt = <<<PROMPT
 Anda adalah SEO specialist. Buat META TITLE dan META DESCRIPTION dengan fokus HIGH CTR dari konten berikut.
 
 Keyword Target: {$keyword}
-Bahasa: {$locale}
+Bahasa: {$effectiveLocale}
 
 KONTEN:
 {$preview}
@@ -448,6 +450,33 @@ PROMPT;
         }
 
         return [];
+    }
+
+    private function detectLanguage(string $text): string
+    {
+        $idWords = ['yang', 'dan', 'di ', 'ke ', 'dari', 'dengan', 'untuk', 'pada', 'adalah', 'ini', 'itu', 'tidak', 'akan', 'dalam', 'juga', 'ada', 'karena', 'seperti', 'atau', 'sudah', 'belum', 'bisa', 'dapat', 'lebih', 'dibuat', 'setiap', 'pengguna', 'hanya', 'untuk', 'sebuah', 'tersebut', 'menjadi'];
+        $enWords = ['the', 'and', 'of', 'to', 'in', 'is', 'are', 'for', 'with', 'that', 'this', 'you', 'your', 'it', 'on', 'as', 'by', 'from', 'at', 'be', 'not', 'we', 'our', 'will', 'can', 'have', 'has', 'their', 'more', 'about', 'into', 'such', 'these', 'those'];
+
+        $lower = mb_strtolower($text);
+
+        $idCount = 0;
+        foreach ($idWords as $w) {
+            $idCount += substr_count($lower, $w);
+        }
+
+        $enCount = 0;
+        foreach ($enWords as $w) {
+            $enCount += substr_count($lower, $w);
+        }
+
+        if ($idCount > $enCount) {
+            return 'id';
+        }
+        if ($enCount > $idCount) {
+            return 'en';
+        }
+
+        return 'id';
     }
 
     private function fallbackQuestions(string $keyword): array

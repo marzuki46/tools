@@ -22,6 +22,7 @@ class ToolApiController extends Controller
         ],
         'content-generator' => [
             'generate' => 'handleContentGenerate',
+            'expand' => 'handleContentExpand',
             'status' => 'handleContentStatus',
             'generate-meta' => 'handleGenerateMeta',
             'regen-phase3' => 'handleContentRegenPhase3',
@@ -146,6 +147,49 @@ class ToolApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Content generation queued successfully.',
+            'data' => [
+                'id' => $generation->id,
+                'target_keyword' => $generation->target_keyword,
+                'status' => 'draft',
+            ],
+        ], 202);
+    }
+
+    private function handleContentExpand(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'content' => 'required|string',
+            'keyword' => 'required|string|max:255',
+            'locale' => 'nullable|string|max:10',
+            'tone' => 'nullable|string|max:50',
+            'lsi_keywords' => 'nullable|array|max:50',
+            'lsi_keywords.*' => 'nullable',
+            'entities' => 'nullable|array|max:30',
+            'entities.*' => 'nullable',
+            'business_profile_id' => 'nullable|integer|exists:business_profiles,id',
+        ]);
+
+        $website = $request->attributes->get('api_key_website');
+
+        $generation = ContentGeneration::create([
+            'user_id' => auth()->id(),
+            'api_key_website_id' => $website?->id,
+            'target_keyword' => $validated['keyword'],
+            'locale' => $validated['locale'] ?? 'id',
+            'tone' => $validated['tone'] ?? 'informative',
+            'lsi_keywords' => $validated['lsi_keywords'] ?? [],
+            'entities' => $validated['entities'] ?? [],
+            'business_profile_id' => $validated['business_profile_id'] ?? null,
+            'phase_1_content' => $validated['content'],
+            'status' => 'draft',
+            'current_phase' => 1,
+        ]);
+
+        ProcessContentGenerationJob::dispatch($generation);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Content expansion queued successfully.',
             'data' => [
                 'id' => $generation->id,
                 'target_keyword' => $generation->target_keyword,
