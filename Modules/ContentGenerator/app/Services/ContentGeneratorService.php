@@ -23,7 +23,7 @@ class ContentGeneratorService
         return config("content-generator.{$key}", $default);
     }
 
-    public function generatePhase1(string $keyword, string $locale, string $tone, array $lsiKeywords, array $entities, ?int $userId = null, ?\App\Models\BusinessProfile $businessProfile = null): string
+    public function generatePhase1(string $keyword, string $locale, string $tone, array $lsiKeywords, array $entities, ?int $userId = null, ?\App\Models\BusinessProfile $businessProfile = null, ?int $targetWords = null, ?array $brief = null): string
     {
         $memoryText = '';
         if ($userId) {
@@ -37,9 +37,121 @@ class ContentGeneratorService
         }
 
         $businessText = $businessProfile?->toPromptContext() ?? '';
+        $briefText = $brief ? $this->buildBriefPromptContext($brief) : '';
 
-        $prompt = $this->buildPhase1Prompt($keyword, $locale, $tone, $lsiKeywords, $entities, $userId, $memoryText, $businessText);
+        $prompt = $this->buildPhase1Prompt($keyword, $locale, $tone, $lsiKeywords, $entities, $userId, $memoryText, $businessText, $targetWords, $briefText);
         return $this->processContent($this->callAI($prompt));
+    }
+
+    public function buildBriefPromptContext(array $brief): string
+    {
+        $parts = [];
+
+        if (!empty($brief['meta_title'])) {
+            $parts[] = "Meta Title yang DITETAPKAN: {$brief['meta_title']}";
+        }
+        if (!empty($brief['h1_tag'])) {
+            $parts[] = "Judul H1 yang HARUS digunakan sebagai judul utama artikel: {$brief['h1_tag']}";
+        }
+        if (!empty($brief['url_slug'])) {
+            $parts[] = "URL Slug yang DITETAPKAN: {$brief['url_slug']}";
+        }
+        if (!empty($brief['target_audience'])) {
+            $parts[] = "Target Audiens Spesifik: {$brief['target_audience']}";
+        }
+        if (!empty($brief['pain_point'])) {
+            $parts[] = "Pain Point (masalah yang harus diselesaikan): {$brief['pain_point']}";
+        }
+        $localEntities = $brief['local_entities'] ?? [];
+        if (!empty($localEntities)) {
+            $parts[] = "Entitas Lokal (sematkan secara natural): " . implode(', ', $localEntities);
+        }
+
+        if (empty($parts)) {
+            return '';
+        }
+
+        return "\n\n---\nCONTENT BRIEF (sasaran penulisan, ikuti dengan ketat):\n" . implode("\n", $parts) . "\n---";
+    }
+
+    public function buildBrief(string $keyword, string $locale = 'id', int $keywordCount = 10): array
+    {
+        $prompt = $this->buildBriefPrompt($keyword, $locale, $keywordCount);
+        $raw = $this->stripFences($this->callAI($prompt));
+        $parsed = json_decode($raw, true);
+
+        if (!is_array($parsed)) {
+            Log::warning('ContentGenerator: failed to parse brief', ['raw' => $raw]);
+            return $this->fallbackBrief($keyword);
+        }
+
+        return [
+            'meta_title' => $parsed['meta_title'] ?? null,
+            'h1_tag' => $parsed['h1_tag'] ?? null,
+            'url_slug' => $parsed['url_slug'] ?? null,
+            'target_audience' => $parsed['target_audience'] ?? null,
+            'pain_point' => $parsed['pain_point'] ?? null,
+            'local_entities' => $parsed['local_entities'] ?? [],
+            'keywords' => $parsed['keywords'] ?? [],
+            'raw_response' => $parsed,
+        ];
+    }
+
+    private function buildBriefPrompt(string $keyword, string $locale, int $keywordCount): string
+    {
+        $langName = $locale === 'en' ? 'English' : 'Bahasa Indonesia';
+
+        return <<<PROMPT
+Anda adalah pakar SEO content strategist. Buat CONTENT BRIEF yang tepat sasaran untuk keyword utama, lalu perluas menjadi {$keywordCount} keyword cluster yang saling mendukung.
+
+Target Keyword Utama: {$keyword}
+Bahasa: {$langName}
+
+Return ONLY valid JSON (no markdown, no code fences) dengan skema:
+{
+  "meta_title": "Judul meta maksimal 60 karakter, mengandung keyword utama dan nilai jual",
+  "h1_tag": "Judul H1 maksimal 70 karakter, natural, mengandung keyword utama dan varian lokal",
+  "url_slug": "url slug singkat tanpa spasi, huruf kecil, pakai tanda hubung",
+  "target_audience": "Siapa target pembaca paling spesifik (profesi/role)",
+  "pain_point": "Masalah paling nyata yang dialami target audience terkait topik ini",
+  "local_entities": ["entitas lokal/geo yang relevan dengan topik (kota, kawasan, pasar, institusi)"],
+  "keywords": [
+    {"keyword": "long-tail keyword 1", "intent": "pillar|supporting", "priority": 1},
+    {"keyword": "long-tail keyword 2", "intent": "pillar|supporting", "priority": 2}
+  ]
+}
+
+Aturan:
+- Tepat {$keywordCount} keyword pada array keywords.
+- HANYA SATU keyword dengan intent "pillar" (keyword utama, prioritas 1). Sisanya "supporting" dengan prioritas 2-{$keywordCount}.
+- Setiap supporting keyword harus beragam sudut: masalah, solusi, perbandingan, panduan, pertanyaan umum, studi kasus.
+- local_entities maksimal 3 entitas, relevan dan bisa diverifikasi.
+- meta_title dan h1_tag dalam bahasa {$langName}.
+- Keywords cluster dibuat dalam bahasa {$langName}.
+PROMPT;
+    }
+
+    private function fallbackBrief(string $keyword): array
+    {
+        return [
+            'meta_title' => mb_substr("{$keyword} | Panduan Lengkap", 0, 60),
+            'h1_tag' => mb_substr("{$keyword}: Panduan Lengkap", 0, 70),
+            'url_slug' => \Illuminate\Support\Str::slug($keyword),
+            'target_audience' => 'Pembaca yang mencari informasi terkait topik ini',
+            'pain_point' => 'Kesulitan memahami topik dan mencari solusi yang tepat',
+            'local_entities' => [],
+            'keywords' => [
+                ['keyword' => $keyword, 'intent' => 'pillar', 'priority' => 1],
+                ['keyword' => "cara {$keyword}", 'intent' => 'supporting', 'priority' => 2],
+                ['keyword' => "harga {$keyword}", 'intent' => 'supporting', 'priority' => 3],
+                ['keyword' => "{$keyword} terbaik", 'intent' => 'supporting', 'priority' => 4],
+                ['keyword' => "rekomendasi {$keyword}", 'intent' => 'supporting', 'priority' => 5],
+                ['keyword' => "{$keyword} untuk pemula", 'intent' => 'supporting', 'priority' => 6],
+                ['keyword' => "perbandingan {$keyword}", 'intent' => 'supporting', 'priority' => 7],
+                ['keyword' => "manfaat {$keyword}", 'intent' => 'supporting', 'priority' => 8],
+            ],
+            'raw_response' => null,
+        ];
     }
 
     public function generatePhase2(string $phase1Content, string $keyword): array
@@ -50,11 +162,12 @@ class ContentGeneratorService
         return $questions ?: $this->fallbackQuestions($keyword);
     }
 
-    public function generatePhase3(string $phase1Content, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = []): string
+    public function generatePhase3(string $phase1Content, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, ?array $brief = null, array $linkSources = []): string
     {
         $plainText = strip_tags($phase1Content);
         $effectiveLocale = $locale === 'auto' ? $this->detectLanguage($plainText) : $locale;
-        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities);
+        $briefText = $brief ? $this->buildBriefPromptContext($brief) : '';
+        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $targetWords, $briefText, $linkSources);
         return $this->processContent($this->callAI($prompt));
     }
 
@@ -90,7 +203,7 @@ class ContentGeneratorService
         ]);
     }
 
-    private function buildPhase1Prompt(string $keyword, string $locale, string $tone, array $lsiKeywords, array $entities, ?int $userId = null, string $memoryText = '', string $businessText = ''): string
+    private function buildPhase1Prompt(string $keyword, string $locale, string $tone, array $lsiKeywords, array $entities, ?int $userId = null, string $memoryText = '', string $businessText = '', ?int $targetWords = null, string $briefText = ''): string
     {
         $lsiText = '';
         foreach ($lsiKeywords as $lsi) {
@@ -121,6 +234,8 @@ class ContentGeneratorService
         $langRule = $locale === 'en'
             ? 'WRITE 100% IN ENGLISH. Never use Indonesian. The ENTIRE article must be in fluent, natural English.'
             : 'TULIS 100% DALAM BAHASA INDONESIA. Jangan campur dengan bahasa Inggris. Seluruh artikel harus dalam Bahasa Indonesia yang baik dan benar.';
+
+        $minWords = $targetWords ?: 1000;
 
         return <<<PROMPT
 Anda adalah penulis konten profesional. Buat ARTIKEL LENGKAP seperti artikel di blog atau portal berita — BUKAN catatan, BUKAN poin-poin, BUKAN outline.
@@ -154,7 +269,7 @@ Paragraf penutup yang merangkum dan memberi kesimpulan
 Call-to-action ringan di akhir (ajakan membaca lebih lanjut)
 
 KETENTUAN:
-Minimal 1000 kata
+Minimal {$minWords} kata
 Gunakan keyword utama secara natural 3-5 kali dalam artikel
 Semua LSI keywords harus muncul minimal sekali
 Semua entities harus tersemat dalam konteks relevan
@@ -177,6 +292,7 @@ Contoh format paragraf yang SALAH (JANGAN):
 
 {$memoryText}
 {$businessText}
+{$briefText}
 Output HANYA konten artikel dalam format Markdown, tanpa penjelasan tambahan di luar konten.
 PROMPT;
     }
@@ -202,7 +318,7 @@ Return ONLY valid JSON array of objects, no markdown:
 PROMPT;
     }
 
-    private function buildPhase3Prompt(string $phase1Text, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = []): string
+    private function buildPhase3Prompt(string $phase1Text, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, string $briefText = '', array $linkSources = []): string
     {
         $questionsText = '';
         foreach ($questions as $q) {
@@ -225,7 +341,12 @@ PROMPT;
         }
 
         $wordCount = str_word_count($phase1Text);
-        $targetWords = max((int) ($wordCount * 2.0), 1200);
+        if ($targetWords) {
+            $targetWords = max((int) $targetWords, 100);
+        } else {
+            $targetWords = max((int) ($wordCount * 2.0), 1200);
+        }
+        $isBlank = trim($phase1Text) === '';
 
         $toneLabels = [
             'formal' => 'Formal dan profesional, cocok untuk artikel bisnis atau akademik',
@@ -242,6 +363,24 @@ PROMPT;
             ? 'WRITE 100% IN ENGLISH. Never use Indonesian. The ENTIRE article must be in fluent, natural English.'
             : 'TULIS 100% DALAM BAHASA INDONESIA. Jangan campur dengan bahasa Inggris. Seluruh artikel harus dalam Bahasa Indonesia yang baik dan benar.';
 
+        $blankNote = $isBlank
+            ? "Konten awal kosong. Buat seluruh artikel baru berdasarkan judul/keyword berikut dan informasi bisnis (jika ada): {$keyword}"
+            : "Kamu adalah AI. Tambah dan kembangkan konten berikut sehingga mencapai {$targetWords} kata. Kamu bisa mengembangkan setiap bagian dengan detail, data, contoh, dan informasi baru tanpa mengubah makna yang sudah ada.";
+
+        $linkText = '';
+        foreach ($linkSources as $ls) {
+            $lsTitle = $ls['title'] ?? '';
+            $lsSlug = $ls['slug'] ?? '';
+            $lsUrl = $ls['url'] ?? ($lsSlug ? "/{$lsSlug}/" : '');
+            $lsKeyword = $ls['keyword'] ?? '';
+            if ($lsTitle && $lsUrl) {
+                $linkText .= "- {$lsTitle} → {$lsUrl}" . ($lsKeyword ? " (relevan utk: {$lsKeyword})" : '') . "\n";
+            }
+        }
+        if ($linkText !== '') {
+            $linkText = rtrim($linkText, "\n");
+        }
+
         return <<<PROMPT
 Anda adalah penulis konten profesional. Buat ARTIKEL LENGKAP seperti artikel di blog atau portal berita — BUKAN catatan, BUKAN poin-poin, BUKAN outline.
 
@@ -250,6 +389,9 @@ Anda adalah penulis konten profesional. Buat ARTIKEL LENGKAP seperti artikel di 
 Target Keyword: {$keyword}
 Bahasa: {$langName}
 Nada/Tone: {$toneDesc}
+TARGET JUMLAH KATA: minimal {$targetWords} kata
+
+{$blankNote}
 
 KONTEN AWAL (gunakan sebagai fondasi, lalu KEMBANGKAN):
 {$phase1Text}
@@ -261,6 +403,9 @@ LSI Keywords (wajib digunakan secara natural):
 {$lsiText}
 Entities (sematkan dalam konteks yang relevan):
 {$entityText}
+
+SUMBER TAUTAN INTERNAL (wajib: pilih MINIMAL 3 yang paling relevan dengan topik, lalu tautkan dengan anchor text natural di tengah kalimat):
+{$linkText}
 
 STRUKTUR WAJIB:
 Hanya satu `# ` untuk judul utama di awal
@@ -302,6 +447,7 @@ Contoh format paragraf yang BENAR:
 Contoh format paragraf yang SALAH (JANGAN):
 "Hiburan Tiongkok dominasi layar Asia. Penonton global pilih drama cina. Kualitas produksi naik drastis. Cerita makin kompleks."
 
+{$briefText}
 Output HANYA konten artikel dalam format Markdown, tanpa penjelasan tambahan di luar konten.
 PROMPT;
     }

@@ -43,6 +43,13 @@ class ProcessContentGenerationJob implements ShouldQueue
         try {
             $lsiKeywords = $this->generation->lsi_keywords ?? [];
             $entities = $this->generation->entities ?? [];
+            $linkSources = $this->generation->link_sources ?? [];
+            $brief = null;
+
+            if ($this->generation->content_brief_id) {
+                $brief = \Modules\ContentGenerator\Models\ContentBrief::find($this->generation->content_brief_id);
+                $brief = $brief ? $brief->toArray() : null;
+            }
 
             // Phase 1
             if ($this->targetPhase >= 1 && empty($this->generation->phase_1_content)) {
@@ -60,7 +67,9 @@ class ProcessContentGenerationJob implements ShouldQueue
                     $lsiKeywords,
                     $entities,
                     $this->generation->user_id,
-                    $businessProfile
+                    $businessProfile,
+                    $this->generation->target_words,
+                    $brief
                 );
 
                 $this->generation->update(['phase_1_content' => $content]);
@@ -89,7 +98,10 @@ class ProcessContentGenerationJob implements ShouldQueue
                     $this->generation->locale ?? 'id',
                     $this->generation->tone ?? 'informative',
                     $this->generation->lsi_keywords ?? [],
-                    $this->generation->entities ?? []
+                    $this->generation->entities ?? [],
+                    $this->generation->target_words,
+                    $brief,
+                    $linkSources
                 );
 
                 $this->generation->update(['phase_3_content' => $finalContent]);

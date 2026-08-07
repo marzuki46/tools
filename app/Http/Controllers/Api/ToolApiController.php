@@ -7,7 +7,9 @@ use App\Models\Tools\Tool;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Modules\ContentGenerator\Jobs\ProcessContentBriefJob;
 use Modules\ContentGenerator\Jobs\ProcessContentGenerationJob;
+use Modules\ContentGenerator\Models\ContentBrief;
 use Modules\ContentGenerator\Models\ContentGeneration;
 use Modules\ContentGenerator\Services\ContentGeneratorService;
 use Modules\KeywordResearch\Jobs\ProcessKeywordResearchJob;
@@ -26,6 +28,8 @@ class ToolApiController extends Controller
             'status' => 'handleContentStatus',
             'generate-meta' => 'handleGenerateMeta',
             'regen-phase3' => 'handleContentRegenPhase3',
+            'brief' => 'handleContentBrief',
+            'brief-status' => 'handleContentBriefStatus',
         ],
     ];
 
@@ -112,6 +116,64 @@ class ToolApiController extends Controller
         ]);
     }
 
+    private function handleContentBrief(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'keyword' => 'required|string|max:255',
+            'locale' => 'nullable|string|max:10',
+            'keyword_count' => 'nullable|integer|min:8|max:12',
+        ]);
+
+        $website = $request->attributes->get('api_key_website');
+
+        $brief = ContentBrief::create([
+            'user_id' => auth()->id(),
+            'api_key_website_id' => $website?->id,
+            'target_keyword' => $validated['keyword'],
+            'locale' => $validated['locale'] ?? 'id',
+            'status' => 'pending',
+        ]);
+
+        ProcessContentBriefJob::dispatch($brief);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Content brief queued successfully.',
+            'data' => [
+                'id' => $brief->id,
+                'target_keyword' => $brief->target_keyword,
+                'status' => 'pending',
+            ],
+        ], 202);
+    }
+
+    private function handleContentBriefStatus(Request $request): JsonResponse
+    {
+        $request->validate(['id' => 'required|integer']);
+
+        $brief = ContentBrief::where('user_id', auth()->id())
+            ->findOrFail($request->id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $brief->id,
+                'target_keyword' => $brief->target_keyword,
+                'status' => $brief->status,
+                'meta_title' => $brief->meta_title,
+                'h1_tag' => $brief->h1_tag,
+                'url_slug' => $brief->url_slug,
+                'target_audience' => $brief->target_audience,
+                'pain_point' => $brief->pain_point,
+                'local_entities' => $brief->local_entities,
+                'keywords' => $brief->keywords,
+                'error_message' => $brief->error_message,
+                'created_at' => $brief->created_at,
+                'updated_at' => $brief->updated_at,
+            ],
+        ]);
+    }
+
     private function handleContentGenerate(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -124,6 +186,10 @@ class ToolApiController extends Controller
             'entities.*' => 'nullable',
             'business_profile_id' => 'nullable|integer|exists:business_profiles,id',
             'keyword_research_id' => 'nullable|integer|exists:keyword_researches,id',
+            'content_brief_id' => 'nullable|integer|exists:content_briefs,id',
+            'link_sources' => 'nullable|array|max:50',
+            'link_sources.*' => 'nullable',
+            'target_words' => 'nullable|integer|min:100|max:10000',
         ]);
 
         $website = $request->attributes->get('api_key_website');
@@ -136,8 +202,11 @@ class ToolApiController extends Controller
             'tone' => $validated['tone'] ?? 'informative',
             'lsi_keywords' => $validated['lsi_keywords'] ?? [],
             'entities' => $validated['entities'] ?? [],
+            'link_sources' => $validated['link_sources'] ?? [],
             'business_profile_id' => $validated['business_profile_id'] ?? null,
             'keyword_research_id' => $validated['keyword_research_id'] ?? null,
+            'content_brief_id' => $validated['content_brief_id'] ?? null,
+            'target_words' => $validated['target_words'] ?? null,
             'status' => 'draft',
             'current_phase' => 0,
         ]);
@@ -167,6 +236,10 @@ class ToolApiController extends Controller
             'entities' => 'nullable|array|max:30',
             'entities.*' => 'nullable',
             'business_profile_id' => 'nullable|integer|exists:business_profiles,id',
+            'content_brief_id' => 'nullable|integer|exists:content_briefs,id',
+            'link_sources' => 'nullable|array|max:50',
+            'link_sources.*' => 'nullable',
+            'target_words' => 'nullable|integer|min:100|max:10000',
         ]);
 
         $website = $request->attributes->get('api_key_website');
@@ -179,7 +252,10 @@ class ToolApiController extends Controller
             'tone' => $validated['tone'] ?? 'informative',
             'lsi_keywords' => $validated['lsi_keywords'] ?? [],
             'entities' => $validated['entities'] ?? [],
+            'link_sources' => $validated['link_sources'] ?? [],
             'business_profile_id' => $validated['business_profile_id'] ?? null,
+            'content_brief_id' => $validated['content_brief_id'] ?? null,
+            'target_words' => $validated['target_words'] ?? null,
             'phase_1_content' => $validated['content'],
             'status' => 'draft',
             'current_phase' => 1,
