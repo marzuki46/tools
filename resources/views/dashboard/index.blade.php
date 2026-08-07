@@ -68,6 +68,9 @@
             <button onclick="queueStart()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50" id="btn-start">
                 &#9654; Jalankan Sekarang
             </button>
+            <button onclick="queueInstallCron()" class="px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 {{ $queueStatus['cronInstalled'] ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-blue-600 text-white hover:bg-blue-700' }}" id="btn-cron">
+                {{ $queueStatus['cronInstalled'] ? "\u2714 Cron Terpasang" : "\u2699 Pasang Cron Otomatis" }}
+            </button>
             <button onclick="queueRetry()" class="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 transition disabled:opacity-50" id="btn-retry">
                 &#8635; Retry Failed Jobs
             </button>
@@ -78,7 +81,7 @@
         <div class="mt-3 text-xs text-gray-500">&#9889; Auto-nyala aktif: jika ada job masuk saat worker mati, worker otomatis menyala &amp; memproses antrian tiap menit (cron).</div>
         <div id="queue-message" class="mt-3 text-sm hidden"></div>
         <div class="mt-4 pt-4 border-t border-gray-100">
-            <div class="text-xs text-gray-500 font-medium mb-1">Perintah Cron (cPanel) — copy &amp; pasang di Cron Jobs</div>
+            <div class="text-xs text-gray-500 font-medium mb-1">Perintah Cron (fallback manual jika tombol tidak bisa eksekusi)</div>
             <code id="queue-cron" class="block bg-gray-900 text-green-400 text-xs font-mono px-3 py-2 rounded cursor-pointer select-all">{{ $queueStatus['cronCommand'] }}</code>
         </div>
     </div>
@@ -191,6 +194,13 @@ function queueStart() {
         .then(r => r.json()).then(d => showMessage(d.message, d.success ? 'green' : 'red'))
         .finally(() => { btn.disabled = false; btn.textContent = '\u25B6 Jalankan Sekarang'; setTimeout(pollQueue, 1000); });
 }
+function queueInstallCron() {
+    const btn = document.getElementById('btn-cron');
+    btn.disabled = true; btn.textContent = '\u23F3 Memasang cron...';
+    fetch('{{ route('queue.install-cron') }}', { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })
+        .then(r => r.json()).then(d => showMessage(d.message, d.success ? 'green' : 'red'))
+        .finally(() => { btn.disabled = false; setTimeout(pollQueue, 500); });
+}
 function queueRetry() {
     const btn = document.getElementById('btn-retry');
     btn.disabled = true; btn.textContent = '\u23F3 Me-retry...';
@@ -229,6 +239,14 @@ function pollQueue() {
         tgl.className = 'px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ' +
             (d.enabled ? 'bg-gray-800 text-white hover:bg-gray-900' : 'bg-green-600 text-white hover:bg-green-700');
         if (d.cronCommand) document.getElementById('queue-cron').textContent = d.cronCommand;
+        const crn = document.getElementById('btn-cron');
+        if (d.cronInstalled) {
+            crn.textContent = '\u2714 Cron Terpasang';
+            crn.className = 'px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 bg-gray-100 text-gray-600 hover:bg-gray-200';
+        } else {
+            crn.textContent = '\u2699 Pasang Cron Otomatis';
+            crn.className = 'px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700';
+        }
     });
 }
 setInterval(pollQueue, 10000);

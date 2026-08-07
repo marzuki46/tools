@@ -152,7 +152,13 @@ class Setting extends Model
 
     public static function workerEnabled(): bool
     {
-        return static::getValue('queue.worker_enabled', '1') === '1';
+        $value = static::getValue('queue.worker_enabled', '1');
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        return (string) $value === '1';
     }
 
     public static function fontPath(): ?string

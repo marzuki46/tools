@@ -134,6 +134,59 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function queueInstallCron(): JsonResponse
+    {
+        $cronLine = $this->cronCommand();
+
+        if (!function_exists('exec') || PHP_OS_FAMILY === 'Windows') {
+            return response()->json([
+                'success' => false,
+                'installable' => false,
+                'message' => "Server tidak mengizinkan eksekusi crontab otomatis. Pasang manual di cPanel &gt; Cron Jobs:\n<code>$cronLine</code>",
+            ]);
+        }
+
+        try {
+            exec('crontab -l 2>/dev/null', $currentLines, $listCode);
+            $current = implode("\n", $currentLines);
+
+            if (str_contains($current, 'artisan schedule:run')) {
+                return response()->json([
+                    'success' => true,
+                    'installed' => true,
+                    'message' => 'Cron schedule:run sudah terpasang. Tidak perlu diubah.',
+                ]);
+            }
+
+            $newCron = trim($current) === ''
+                ? $cronLine
+                : trim($current) . "\n" . $cronLine;
+
+            $cmd = 'crontab - 2>&1 <<\'CRONEOF\'' . "\n" . $newCron . "\n" . 'CRONEOF';
+            exec($cmd, $installOut, $installCode);
+
+            if ($installCode === 0) {
+                return response()->json([
+                    'success' => true,
+                    'installed' => true,
+                    'message' => 'Cron schedule:run berhasil dipasang otomatis. Worker akan berjalan tiap menit.',
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'installable' => true,
+                'message' => 'Gagal menulis crontab. Pasang manual:\n<code>' . $cronLine . '</code>',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'installable' => false,
+                'message' => 'Gagal mengakses crontab: ' . $e->getMessage(),
+            ]);
+        }
+    }
+
     public function queueClearFailed(): JsonResponse
     {
         \Artisan::call('queue:flush');
@@ -174,12 +227,27 @@ class DashboardController extends Controller
             'color' => $color,
             'label' => $label,
             'enabled' => $enabled,
+            'cronInstalled' => $this->cronInstalled(),
             'lastBeat' => $heartbeat?->toIso8601String(),
             'lastBeatHuman' => $heartbeat ? $heartbeat->diffForHumans() : null,
             'pendingJobs' => $pendingJobs,
             'failedJobs' => $failedJobs,
             'cronCommand' => $this->cronCommand(),
         ];
+    }
+
+    private function cronInstalled(): bool
+    {
+        if (PHP_OS_FAMILY === 'Windows' || !function_exists('exec')) {
+            return false;
+        }
+
+        try {
+            exec('crontab -l 2>/dev/null', $out);
+            return str_contains(implode("\n", $out), 'artisan schedule:run');
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     private function cronCommand(): string
