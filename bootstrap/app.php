@@ -6,6 +6,9 @@ use App\Http\Middleware\WebsiteToolMiddleware;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -22,9 +25,21 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule): void {
-        $schedule->command('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=620 --tries=3')
-            ->everyMinute()
-            ->withoutOverlapping();
+        $schedule->call(function () {
+            if (!\App\Models\Setting::workerEnabled()) {
+                $pending = \DB::table('jobs')->count();
+                if ($pending === 0) {
+                    return;
+                }
+
+                \App\Models\Setting::setValue('queue.worker_enabled', '1');
+                Log::info('Queue worker auto-enabled via scheduler (pending jobs found).', ['pending' => $pending]);
+            }
+
+            \Artisan::call('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=620 --tries=3');
+
+            Cache::put('queue_heartbeat', now()->toIso8601String(), 300);
+        })->name('queue-worker')->everyMinute()->withoutOverlapping();
 
         $schedule->command('seo-cluster:run')
             ->everyThirtyMinutes()

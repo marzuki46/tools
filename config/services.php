@@ -17,7 +17,7 @@ return [
     'nine_router' => [
         'key' => env('NINEROUTER_KEY'),
         'base_url' => env('NINEROUTER_URL'),
-        'model' => env('NINEROUTER_MODEL', 'openai/gpt-4o'),
+        'model' => env('NINEROUTER_MODEL', 'kr/deepseek-3.2'),
     ],
 
     'openai' => [

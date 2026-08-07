@@ -84,6 +84,7 @@ Route::middleware('auth')->group(function () {
     // Queue monitoring
     Route::get('/queue/status', [DashboardController::class, 'queueStatus'])->name('queue.status');
     Route::post('/queue/start', [DashboardController::class, 'queueStart'])->name('queue.start');
+    Route::post('/queue/toggle', [DashboardController::class, 'queueToggle'])->name('queue.toggle');
     Route::post('/queue/retry-failed', [DashboardController::class, 'queueRetryFailed'])->name('queue.retry-failed');
     Route::post('/queue/clear-failed', [DashboardController::class, 'queueClearFailed'])->name('queue.clear-failed');
 

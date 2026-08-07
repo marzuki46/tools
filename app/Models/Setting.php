@@ -150,6 +150,11 @@ class Setting extends Model
         ];
     }
 
+    public static function workerEnabled(): bool
+    {
+        return static::getValue('queue.worker_enabled', '1') === '1';
+    }
+
     public static function fontPath(): ?string
     {
         $path = static::getValue('ai.font_path');

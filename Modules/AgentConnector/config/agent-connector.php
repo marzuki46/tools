@@ -4,7 +4,7 @@ return [
     'ai' => [
         'url' => env('NINEROUTER_URL'),
         'api_key' => env('NINEROUTER_KEY'),
-        'chat_model' => env('AGENT_CHAT_MODEL', 'openai/gpt-4o'),
+        'chat_model' => env('AGENT_CHAT_MODEL', 'kr/deepseek-3.2'),
         'embedding_model' => env('AGENT_EMBEDDING_MODEL', 'gemini/gemini-embedding-001'),
     ],
 

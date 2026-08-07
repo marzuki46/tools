@@ -62,8 +62,11 @@
             </div>
         </div>
         <div class="flex flex-wrap gap-2">
+            <button onclick="queueToggle()" class="px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 {{ $queueStatus['enabled'] ? 'bg-gray-800 text-white hover:bg-gray-900' : 'bg-green-600 text-white hover:bg-green-700' }}" id="btn-toggle">
+                {{ $queueStatus['enabled'] ? "\u23FB Matikan Worker" : "\u25B6 Nyalakan Worker" }}
+            </button>
             <button onclick="queueStart()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50" id="btn-start">
-                &#9654; Jalankan Worker
+                &#9654; Jalankan Sekarang
             </button>
             <button onclick="queueRetry()" class="bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 transition disabled:opacity-50" id="btn-retry">
                 &#8635; Retry Failed Jobs
@@ -72,7 +75,12 @@
                 &#10005; Clear Failed
             </button>
         </div>
+        <div class="mt-3 text-xs text-gray-500">&#9889; Auto-nyala aktif: jika ada job masuk saat worker mati, worker otomatis menyala &amp; memproses antrian tiap menit (cron).</div>
         <div id="queue-message" class="mt-3 text-sm hidden"></div>
+        <div class="mt-4 pt-4 border-t border-gray-100">
+            <div class="text-xs text-gray-500 font-medium mb-1">Perintah Cron (cPanel) — copy &amp; pasang di Cron Jobs</div>
+            <code id="queue-cron" class="block bg-gray-900 text-green-400 text-xs font-mono px-3 py-2 rounded cursor-pointer select-all">{{ $queueStatus['cronCommand'] }}</code>
+        </div>
     </div>
 
     {{-- Quick Actions --}}
@@ -169,12 +177,19 @@
 
 @push('scripts')
 <script>
+function queueToggle() {
+    const btn = document.getElementById('btn-toggle');
+    btn.disabled = true;
+    fetch('{{ route('queue.toggle') }}', { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })
+        .then(r => r.json()).then(d => showMessage(d.message, d.enabled ? 'green' : 'yellow'))
+        .finally(() => { btn.disabled = false; setTimeout(pollQueue, 500); });
+}
 function queueStart() {
     const btn = document.getElementById('btn-start');
-    btn.disabled = true; btn.textContent = '\u23F3 Menjalankan...';
+    btn.disabled = true; btn.textContent = '\u23F3 Memproses...';
     fetch('{{ route('queue.start') }}', { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })
         .then(r => r.json()).then(d => showMessage(d.message, d.success ? 'green' : 'red'))
-        .finally(() => { btn.disabled = false; btn.textContent = '\u25B6 Jalankan Worker'; setTimeout(pollQueue, 1000); });
+        .finally(() => { btn.disabled = false; btn.textContent = '\u25B6 Jalankan Sekarang'; setTimeout(pollQueue, 1000); });
 }
 function queueRetry() {
     const btn = document.getElementById('btn-retry');
@@ -209,6 +224,11 @@ function pollQueue() {
         document.getElementById('queue-failed').textContent = d.failedJobs;
         document.getElementById('queue-beat').textContent = d.lastBeatHuman || 'Tidak ada';
         document.getElementById('queue-status-text').textContent = d.status;
+        const tgl = document.getElementById('btn-toggle');
+        tgl.textContent = d.enabled ? '\u23FB Matikan Worker' : '\u25B6 Nyalakan Worker';
+        tgl.className = 'px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ' +
+            (d.enabled ? 'bg-gray-800 text-white hover:bg-gray-900' : 'bg-green-600 text-white hover:bg-green-700');
+        if (d.cronCommand) document.getElementById('queue-cron').textContent = d.cronCommand;
     });
 }
 setInterval(pollQueue, 10000);
