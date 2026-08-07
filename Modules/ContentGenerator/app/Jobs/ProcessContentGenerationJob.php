@@ -91,6 +91,11 @@ class ProcessContentGenerationJob implements ShouldQueue
             if ($this->targetPhase >= 3 && empty($this->generation->phase_3_content)) {
                 $this->generation->update(['status' => 'phase_3', 'current_phase' => 3]);
 
+                $businessProfile = null;
+                if ($this->generation->business_profile_id) {
+                    $businessProfile = BusinessProfile::find($this->generation->business_profile_id);
+                }
+
                 $finalContent = $service->generatePhase3(
                     $this->generation->phase_1_content,
                     $this->generation->phase_2_questions ?? [],
@@ -101,7 +106,8 @@ class ProcessContentGenerationJob implements ShouldQueue
                     $this->generation->entities ?? [],
                     $this->generation->target_words,
                     $brief,
-                    $linkSources
+                    $linkSources,
+                    $businessProfile
                 );
 
                 $this->generation->update(['phase_3_content' => $finalContent]);

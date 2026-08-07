@@ -162,12 +162,13 @@ PROMPT;
         return $questions ?: $this->fallbackQuestions($keyword);
     }
 
-    public function generatePhase3(string $phase1Content, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, ?array $brief = null, array $linkSources = []): string
+    public function generatePhase3(string $phase1Content, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, ?array $brief = null, array $linkSources = [], ?\App\Models\BusinessProfile $businessProfile = null): string
     {
         $plainText = strip_tags($phase1Content);
         $effectiveLocale = $locale === 'auto' ? $this->detectLanguage($plainText) : $locale;
         $briefText = $brief ? $this->buildBriefPromptContext($brief) : '';
-        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $targetWords, $briefText, $linkSources);
+        $businessText = $businessProfile?->toPromptContext() ?? '';
+        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $targetWords, $briefText, $linkSources, $businessText);
         return $this->processContent($this->callAI($prompt));
     }
 
@@ -318,7 +319,7 @@ Return ONLY valid JSON array of objects, no markdown:
 PROMPT;
     }
 
-    private function buildPhase3Prompt(string $phase1Text, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, string $briefText = '', array $linkSources = []): string
+    private function buildPhase3Prompt(string $phase1Text, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, string $briefText = '', array $linkSources = [], string $businessText = ''): string
     {
         $questionsText = '';
         foreach ($questions as $q) {
@@ -446,6 +447,8 @@ Contoh format paragraf yang BENAR:
 
 Contoh format paragraf yang SALAH (JANGAN):
 "Hiburan Tiongkok dominasi layar Asia. Penonton global pilih drama cina. Kualitas produksi naik drastis. Cerita makin kompleks."
+
+{$businessText}
 
 {$briefText}
 Output HANYA konten artikel dalam format Markdown, tanpa penjelasan tambahan di luar konten.

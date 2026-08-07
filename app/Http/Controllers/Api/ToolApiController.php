@@ -315,6 +315,11 @@ class ToolApiController extends Controller
             : ($generation->phase_2_questions ?? []);
 
         try {
+            $businessProfile = null;
+            if ($generation->business_profile_id) {
+                $businessProfile = \App\Models\BusinessProfile::find($generation->business_profile_id);
+            }
+
             $content = app(ContentGeneratorService::class)->generatePhase3(
                 $generation->phase_1_content,
                 $questions,
@@ -322,7 +327,11 @@ class ToolApiController extends Controller
                 $generation->locale ?? 'id',
                 $generation->tone ?? 'informative',
                 $generation->lsi_keywords ?? [],
-                $generation->entities ?? []
+                $generation->entities ?? [],
+                $generation->target_words,
+                null,
+                $generation->link_sources ?? [],
+                $businessProfile
             );
 
             $generation->update([
