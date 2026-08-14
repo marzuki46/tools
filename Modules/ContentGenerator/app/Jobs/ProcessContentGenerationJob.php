@@ -69,7 +69,8 @@ class ProcessContentGenerationJob implements ShouldQueue
                     $this->generation->user_id,
                     $businessProfile,
                     $this->generation->target_words,
-                    $brief
+                    $brief,
+                    $this->generation->include_external_links
                 );
 
                 $this->generation->update(['phase_1_content' => $content]);
@@ -96,6 +97,11 @@ class ProcessContentGenerationJob implements ShouldQueue
                     $businessProfile = BusinessProfile::find($this->generation->business_profile_id);
                 }
 
+                $website = null;
+                if ($this->generation->api_key_website_id) {
+                    $website = \App\Models\ApiKeyWebsite::find($this->generation->api_key_website_id);
+                }
+
                 $finalContent = $service->generatePhase3(
                     $this->generation->phase_1_content,
                     $this->generation->phase_2_questions ?? [],
@@ -107,7 +113,9 @@ class ProcessContentGenerationJob implements ShouldQueue
                     $this->generation->target_words,
                     $brief,
                     $linkSources,
-                    $businessProfile
+                    $businessProfile,
+                    $this->generation->include_external_links,
+                    $website
                 );
 
                 $this->generation->update(['phase_3_content' => $finalContent]);

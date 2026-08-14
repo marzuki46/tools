@@ -22,6 +22,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-700 mb-1">Locale</label>
                 <select name="locale" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                    <option value="auto" selected>Auto / Ikuti Blog</option>
                     <option value="id">Indonesia</option>
                     <option value="en">English</option>
                 </select>
@@ -37,6 +38,14 @@
                     <option value="instructional">Instruksional / Tutorial</option>
                 </select>
             </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <input type="checkbox" name="include_external_links" id="include-external-links" value="1" checked
+                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+            <label for="include-external-links" class="block text-sm font-medium text-gray-700">
+                Sertakan link eksternal <span class="text-gray-400 font-normal">(maksimal 1, opsional)</span>
+            </label>
         </div>
 
         <div>

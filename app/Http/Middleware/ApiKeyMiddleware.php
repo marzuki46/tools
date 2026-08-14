@@ -59,6 +59,7 @@ class ApiKeyMiddleware
             $website->update([
                 'last_used_at' => now(),
                 'last_ip' => $request->ip(),
+                'locale' => $this->detectLocale($request) ?: $website->locale,
             ]);
 
             $request->attributes->set('api_key_website', $website);
@@ -89,6 +90,18 @@ class ApiKeyMiddleware
             if ($parsed) return $parsed;
         }
 
+        return null;
+    }
+
+    private function detectLocale(Request $request): ?string
+    {
+        $locale = strtolower(trim((string) $request->header('X-Site-Locale')));
+        if (strlen($locale) >= 2) {
+            $locale = substr($locale, 0, 2);
+        }
+        if (in_array($locale, ['id', 'en'], true)) {
+            return $locale;
+        }
         return null;
     }
 

@@ -23,8 +23,24 @@ class ContentGeneratorService
         return config("content-generator.{$key}", $default);
     }
 
-    public function generatePhase1(string $keyword, string $locale, string $tone, array $lsiKeywords, array $entities, ?int $userId = null, ?\App\Models\BusinessProfile $businessProfile = null, ?int $targetWords = null, ?array $brief = null): string
+    public function resolveLocale(?string $locale, ?\App\Models\ApiKeyWebsite $website = null, string $text = ''): string
     {
+        $locale = trim((string) $locale);
+        if (in_array($locale, ['id', 'en'], true)) {
+            return $locale;
+        }
+        if ($website && in_array($website->locale, ['id', 'en'], true)) {
+            return $website->locale;
+        }
+        if (trim($text) !== '') {
+            return $this->detectLanguage($text);
+        }
+        return 'id';
+    }
+
+    public function generatePhase1(string $keyword, string $locale, string $tone, array $lsiKeywords, array $entities, ?int $userId = null, ?\App\Models\BusinessProfile $businessProfile = null, ?int $targetWords = null, ?array $brief = null, ?bool $includeExternalLinks = null): string
+    {
+        $effectiveLocale = $this->resolveLocale($locale);
         $memoryText = '';
         if ($userId) {
             try {
@@ -39,7 +55,7 @@ class ContentGeneratorService
         $businessText = $businessProfile?->toPromptContext() ?? '';
         $briefText = $brief ? $this->buildBriefPromptContext($brief) : '';
 
-        $prompt = $this->buildPhase1Prompt($keyword, $locale, $tone, $lsiKeywords, $entities, $userId, $memoryText, $businessText, $targetWords, $briefText);
+        $prompt = $this->buildPhase1Prompt($keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $userId, $memoryText, $businessText, $targetWords, $briefText, $includeExternalLinks);
         return $this->processContent($this->callAI($prompt));
     }
 
@@ -162,14 +178,48 @@ PROMPT;
         return $questions ?: $this->fallbackQuestions($keyword);
     }
 
-    public function generatePhase3(string $phase1Content, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, ?array $brief = null, array $linkSources = [], ?\App\Models\BusinessProfile $businessProfile = null): string
+    public function generatePhase3(string $phase1Content, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, ?array $brief = null, array $linkSources = [], ?\App\Models\BusinessProfile $businessProfile = null, ?bool $includeExternalLinks = null, ?\App\Models\ApiKeyWebsite $website = null): string
     {
         $plainText = strip_tags($phase1Content);
-        $effectiveLocale = $locale === 'auto' ? $this->detectLanguage($plainText) : $locale;
+        $effectiveLocale = $this->resolveLocale($locale, $website, $plainText);
         $briefText = $brief ? $this->buildBriefPromptContext($brief) : '';
         $businessText = $businessProfile?->toPromptContext() ?? '';
-        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $targetWords, $briefText, $linkSources, $businessText);
-        return $this->processContent($this->callAI($prompt));
+
+        $slop = app(NoAiSlopService::class);
+        $rewriteEnabled = (bool) $this->cfg('ai_slop.rewrite_enabled', true);
+        $maxRetries = max(1, (int) $this->cfg('ai_slop.max_retries', 2));
+        $autoFix = (bool) $this->cfg('ai_slop.auto_fix_banned_words', false);
+
+        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $targetWords, $briefText, $linkSources, $businessText, $includeExternalLinks);
+        $content = $this->processContent($this->callAI($prompt));
+
+        $attempt = 1;
+        while ($attempt <= $maxRetries && $rewriteEnabled) {
+            $hits = $slop->scan($content, $effectiveLocale);
+            if (!$slop->shouldRewrite($hits, $effectiveLocale)) {
+                break;
+            }
+
+            Log::warning('NoAiSlopService: rewrite triggered', [
+                'keyword' => $keyword,
+                'locale' => $effectiveLocale,
+                'attempt' => $attempt,
+                'max_retries' => $maxRetries,
+                'count' => count($hits),
+                'score' => $slop->score($hits, $effectiveLocale),
+                'hits' => array_slice($hits, 0, 20),
+            ]);
+
+            $fixPrompt = $this->buildPhase3FixPrompt($content, $hits, $keyword, $effectiveLocale, $tone);
+            $content = $this->processContent($this->callAI($fixPrompt));
+            $attempt++;
+        }
+
+        if ($autoFix) {
+            $content = $slop->clean($content, $effectiveLocale, true);
+        }
+
+        return $content;
     }
 
     private function stripFences(string $text): string
@@ -204,7 +254,7 @@ PROMPT;
         ]);
     }
 
-    private function buildPhase1Prompt(string $keyword, string $locale, string $tone, array $lsiKeywords, array $entities, ?int $userId = null, string $memoryText = '', string $businessText = '', ?int $targetWords = null, string $briefText = ''): string
+    private function buildPhase1Prompt(string $keyword, string $locale, string $tone, array $lsiKeywords, array $entities, ?int $userId = null, string $memoryText = '', string $businessText = '', ?int $targetWords = null, string $briefText = '', ?bool $includeExternalLinks = null): string
     {
         $lsiText = '';
         foreach ($lsiKeywords as $lsi) {
@@ -237,6 +287,7 @@ PROMPT;
             : 'TULIS 100% DALAM BAHASA INDONESIA. Jangan campur dengan bahasa Inggris. Seluruh artikel harus dalam Bahasa Indonesia yang baik dan benar.';
 
         $minWords = $targetWords ?: 1000;
+        $externalLinkRule = $this->externalLinkRule($includeExternalLinks);
 
         return <<<PROMPT
 Anda adalah penulis konten profesional. Buat ARTIKEL LENGKAP seperti artikel di blog atau portal berita — BUKAN catatan, BUKAN poin-poin, BUKAN outline.
@@ -258,14 +309,14 @@ Hanya satu `# ` untuk judul utama di awal
 `### ` untuk sub-sub-judul (jika perlu)
 Paragraf dengan kalimat yang mengalir natural, bervariasi antara pendek dan panjang, dipisah baris kosong
 `- ` untuk bullet list (jika perlu)
-`[teks tautan](https://contoh.com)` untuk link ke sumber relevan (minimal 3 link relevan)
+`[teks tautan](https://contoh.com)` untuk link ke sumber relevan
 
 ISI ARTIKEL:
 Judul utama (#) yang mengandung keyword target
 Paragraf pembuka yang menjelaskan topik dan menarik minat baca
 3-5 sub-bagian (##) yang membahas aspek berbeda dari topik
 Data, fakta, contoh nyata, atau statistik di setiap sub-bagian
-Minimal 3 tautan (link) ke sumber eksternal relevan
+{$externalLinkRule}
 Paragraf penutup yang merangkum dan memberi kesimpulan
 Call-to-action ringan di akhir (ajakan membaca lebih lanjut)
 
@@ -282,7 +333,7 @@ READABILITY (WAJIB):
 - Kalimat dalam satu paragraf harus TERHUBUNG dengan konjungsi (dan, tetapi, sementara, sehingga, karena, namun, oleh karena itu, selain itu, di sisi lain)
 - JANGAN pernah menulis 2+ kalimat pendek beruntun tanpa kata hubung — itu namanya gaya staccato, sangat tidak enak dibaca
 - Variasikan panjang kalimat: ada yang pendek (5-8 kata), ada yang sedang (10-15 kata), ada yang panjang (16-25 kata)
-- Gunakan kata transisi antarkalimat: "Selain itu...", "Di sisi lain...", "Lebih lanjut...", "Sebagai contoh...", "Pada akhirnya...", "Tak hanya itu..."
+- Gunakan kata transisi antarkalimat: "Selain itu...", "Di sisi lain...", "Lebih lanjut...", "Sebagai contoh...", "Tak hanya itu..."
 - SETIAP heading harus memiliki 2-5 paragraf dengan total minimal 5 kalimat
 
 Contoh format paragraf yang BENAR:
@@ -296,6 +347,40 @@ Contoh format paragraf yang SALAH (JANGAN):
 {$briefText}
 Output HANYA konten artikel dalam format Markdown, tanpa penjelasan tambahan di luar konten.
 PROMPT;
+    }
+
+    private function externalLinkRule(?bool $includeExternalLinks = null): string
+    {
+        $enabled = $includeExternalLinks ?? (bool) $this->cfg('include_external_links', true);
+
+        if ($enabled) {
+            return "Sertakan MAKSIMAL 1 (satu) tautan eksternal ke sumber yang relevan dan dapat diverifikasi. JANGAN lebih dari satu tautan eksternal.";
+        }
+
+        return "JANGAN sertakan tautan eksternal sama sekali. Hanya gunakan tautan internal dari daftar jika tersedia.";
+    }
+
+    private function antiSlopRuleBlock(string $locale): string
+    {
+        if ($locale !== 'en') {
+            return '';
+        }
+
+        return <<<RULE
+ENGLISH ANTI-AI-SLOP (MANDATORY):
+- NEVER use these empty words: delve, foster, leverage, utilize, facilitate, empower, streamline, robust, cutting-edge, paradigm shift, game changer, transformative, elevate, embark, supercharge, harness, ever-evolving, tapestry, realm, beacon.
+- NEVER use filler phrases: "it's worth noting", "it's important to note", "at the end of the day", "when it comes to", "in today's world", "the reality is", "in this article", "let's dive in".
+- NEVER use em dashes (—) or en dashes (–). Replace them with periods, commas, colons, or parentheses.
+- NEVER use vague attribution like "experts believe" or "industry reports" without a real, named source.
+- NEVER use chatbot jargon like "I hope this helps" or "let me know if".
+- Avoid copula substitutes: "serves as", "boasts", "stands as" — prefer "is" and "has".
+- Never end with a generic pep-talk like "the future looks bright".
+- NEVER open with throat-clearing: "Here's the thing", "Let me be clear", "The uncomfortable truth is".
+- Avoid binary contrasts ("It's not X, it's Y"), colon reveals, fake-profound kickers, and synonym cycling.
+- Do not invent facts, names, dates, or citations that are not present in the source text.
+- Write like a human: active voice, specific, concrete, straight to the point.
+
+RULE;
     }
 
     private function buildPhase2Prompt(string $content, string $keyword): string
@@ -319,7 +404,7 @@ Return ONLY valid JSON array of objects, no markdown:
 PROMPT;
     }
 
-    private function buildPhase3Prompt(string $phase1Text, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, string $briefText = '', array $linkSources = [], string $businessText = ''): string
+    private function buildPhase3Prompt(string $phase1Text, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, string $briefText = '', array $linkSources = [], string $businessText = '', ?bool $includeExternalLinks = null): string
     {
         $questionsText = '';
         foreach ($questions as $q) {
@@ -381,6 +466,8 @@ PROMPT;
         if ($linkText !== '') {
             $linkText = rtrim($linkText, "\n");
         }
+        $externalLinkRule = $this->externalLinkRule($includeExternalLinks);
+        $slopRule = $this->antiSlopRuleBlock($locale);
 
         return <<<PROMPT
 Anda adalah penulis konten profesional. Buat ARTIKEL LENGKAP seperti artikel di blog atau portal berita — BUKAN catatan, BUKAN poin-poin, BUKAN outline.
@@ -414,15 +501,15 @@ Hanya satu `# ` untuk judul utama di awal
 `### ` untuk sub-sub-judul (jika perlu)
 Paragraf dengan kalimat yang mengalir natural, bervariasi antara pendek dan panjang, dipisah baris kosong
 `- ` untuk bullet list (jika perlu)
-`[teks tautan](https://contoh.com)` untuk link ke sumber relevan (minimal 3 link relevan)
+`[teks tautan](https://contoh.com)` untuk link ke sumber relevan
 
 ISI ARTIKEL:
 Judul utama (#) yang mengandung keyword target
 Paragraf pembuka yang menjelaskan topik dan menarik minat baca
 KEMBANGKAN setiap bagian dari konten awal dengan detail, contoh, dan data baru
 Setiap pertanyaan kritis jadikan SATU SUB-BAGIAN (##) baru — dikembangkan penuh dengan paragraf
-Minimal 3 tautan (link) ke sumber eksternal relevan
-Paragraf penutup yang merangkum dan memberi kesimpulan
+{$externalLinkRule}
+Paragraf penutup yang memberi kesimpulan KONKRET atau takeaway praktis — JANGAN sekadar mengulang isi artikel
 Call-to-action ringan di akhir
 
 KETENTUAN:
@@ -434,12 +521,23 @@ Tulisan mengalir seperti artikel profesional — jangan kaku dan jangan seperti 
 JANGAN gunakan format Q&A — integrasikan semua dalam alur artikel naratif
 JANGAN ada catatan kaki, komentar penulis, atau metadata apapun
 
+GAYA PENULISAN (HINDARI AI-SLOP — WAJIB):
+JANGAN gunakan kata-kata isi angin: memfasilitasi, memberdayakan, transformatif, revolusioner, mutakhir, komprehensif, pergeseran paradigma, "penting untuk dicatat", "perlu digarisbawahi", "di era modern", "mari kita bahas", "dalam artikel ini".
+JANGAN buka kalimat dengan basa-basi: "Hal yang tidak banyak orang tahu", "Yang paling sering diabaikan", "Bagian yang jarang dibahas".
+JANGAN pakai kontras biner ("Ini bukan X, melainkan Y"), colon reveal dramatis ("Kuncinya: ..."), em dash (—), atau kalimat sok-dalam di akhir.
+JANGAN pakai atribusi samar seperti "para ahli" atau "banyak pihak", dan jangan memakai jargon obrolan seperti "Semoga membantu".
+JANGAN ulangi sinonim secara bergaya; pakai kata yang jelas dan konsisten.
+JANGAN menambahkan fakta, nama, tanggal, angka, atau kutipan yang tidak ada pada konten sumber.
+Tulis seperti manusia: langsung ke poin, kalimat aktif, spesifik, dan natural.
+
+{$slopRule}
+
 READABILITY (WAJIB):
 - SETIAP paragraf minimal 3 kalimat — jangan ada paragraf 1-2 kalimat
 - Kalimat dalam satu paragraf harus TERHUBUNG dengan konjungsi (dan, tetapi, sementara, sehingga, karena, namun, oleh karena itu, selain itu, di sisi lain)
 - JANGAN pernah menulis 2+ kalimat pendek beruntun tanpa kata hubung — itu namanya gaya staccato, sangat tidak enak dibaca
 - Variasikan panjang kalimat: ada yang pendek (5-8 kata), ada yang sedang (10-15 kata), ada yang panjang (16-25 kata)
-- Gunakan kata transisi antarkalimat: "Selain itu...", "Di sisi lain...", "Lebih lanjut...", "Sebagai contoh...", "Pada akhirnya...", "Tak hanya itu..."
+- Gunakan kata transisi antarkalimat: "Selain itu...", "Di sisi lain...", "Lebih lanjut...", "Sebagai contoh...", "Tak hanya itu..."
 - SETIAP heading harus memiliki 2-5 paragraf dengan total minimal 5 kalimat
 
 Contoh format paragraf yang BENAR:
@@ -452,6 +550,55 @@ Contoh format paragraf yang SALAH (JANGAN):
 
 {$briefText}
 Output HANYA konten artikel dalam format Markdown, tanpa penjelasan tambahan di luar konten.
+PROMPT;
+    }
+
+    private function buildPhase3FixPrompt(string $currentContent, array $hits, string $keyword, string $locale, string $tone): string
+    {
+        $langName = $locale === 'en' ? 'English' : 'Bahasa Indonesia';
+        $langRule = $locale === 'en'
+            ? 'WRITE 100% IN ENGLISH. Never use Indonesian.'
+            : 'TULIS 100% DALAM BAHASA INDONESIA. Jangan campur dengan bahasa Inggris.';
+
+        $hitLines = '';
+        foreach ($hits as $hit) {
+            $hitLines .= "- [{$hit['pattern']}] (baris {$hit['line']}): " . trim($hit['snippet'] ?? '') . "\n";
+        }
+
+        $slopRule = $this->antiSlopRuleBlock($locale);
+
+        $idRules = $locale === 'en' ? '' : <<<RULES
+GAYA PENULISAN (HINDARI AI-SLOP — WAJIB):
+- JANGAN gunakan kata-kata isi angin: memfasilitasi, memberdayakan, transformatif, revolusioner, mutakhir, komprehensif, pergeseran paradigma, "penting untuk dicatat", "perlu digarisbawahi", "di era modern", "mari kita bahas", "dalam artikel ini".
+- JANGAN pakai kontras biner ("Ini bukan X, melainkan Y"), colon reveal dramatis, em dash (—), atau kalimat sok-dalam.
+- JANGAN gunakan atribusi samar seperti "para ahli", "banyak pihak", atau jargon obrolan seperti "Semoga membantu".
+- Tulis seperti manusia: kalimat aktif, spesifik, dan langsung ke poin.
+
+RULES;
+
+        return <<<PROMPT
+Anda adalah editor penulis senior. Artikel berikut mengandung pola penulisan yang khas buatan AI (AI-slop). Perbaiki HANYA pola yang terdeteksi berikut ini, tanpa mengubah fakta, makna, struktur paragraf, keyword, tautan, atau jumlah kata secara drastis.
+
+Keyword: {$keyword}
+Bahasa: {$langName}
+Nada: {$tone}
+
+{$langRule}
+
+POLA YANG TERDETEKSI (perbaiki semua ini):
+{$hitLines}
+
+{$idRules}
+{$slopRule}
+
+ATURAN PENTING:
+- JANGAN menambahkan fakta, nama, tanggal, angka, kutipan, atau referensi baru yang tidak ada di teks.
+- Pertahankan semua heading, paragraf, dan informasi yang sudah benar.
+- Perbaiki dengan mengganti frasa/kalimat yang bermasalah dengan versi yang lebih natural, bukan menghapus informasi penting.
+- Output HANYA konten artikel hasil perbaikan dalam format Markdown, tanpa penjelasan tambahan.
+
+KONTEN SAAT INI:
+{$currentContent}
 PROMPT;
     }
 

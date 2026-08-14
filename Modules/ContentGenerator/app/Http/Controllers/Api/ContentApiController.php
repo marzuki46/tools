@@ -20,15 +20,22 @@ class ContentApiController extends Controller
             'lsi_keywords.*' => 'nullable',
             'entities' => 'nullable|array|max:30',
             'entities.*' => 'nullable',
+            'include_external_links' => 'nullable|boolean',
         ]);
+
+        $service = app(\Modules\ContentGenerator\Services\ContentGeneratorService::class);
+        $website = $request->attributes->get('api_key_website');
+        $locale = $service->resolveLocale($validated['locale'] ?? null, $website, $validated['keyword']);
 
         $generation = ContentGeneration::create([
             'user_id' => $request->user()->id,
+            'api_key_website_id' => $website?->id,
             'target_keyword' => $validated['keyword'],
-            'locale' => $validated['locale'] ?? 'id',
+            'locale' => $locale,
             'tone' => $validated['tone'] ?? 'informative',
             'lsi_keywords' => $validated['lsi_keywords'] ?? [],
             'entities' => $validated['entities'] ?? [],
+            'include_external_links' => $validated['include_external_links'] ?? null,
             'status' => 'draft',
             'current_phase' => 0,
         ]);

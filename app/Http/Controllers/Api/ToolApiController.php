@@ -66,12 +66,14 @@ class ToolApiController extends Controller
         ]);
 
         $website = $request->attributes->get('api_key_website');
+        $service = app(ContentGeneratorService::class);
+        $locale = $service->resolveLocale($validated['locale'] ?? null, $website, $validated['keyword']);
 
         $research = KeywordResearch::create([
             'user_id' => auth()->id(),
             'api_key_website_id' => $website?->id,
             'target_keyword' => $validated['keyword'],
-            'locale' => $validated['locale'] ?? 'id',
+            'locale' => $locale,
             'lsi_count' => $validated['lsi_count'] ?? 12,
             'entities_count' => $validated['entities_count'] ?? 7,
             'status' => 'pending',
@@ -125,12 +127,14 @@ class ToolApiController extends Controller
         ]);
 
         $website = $request->attributes->get('api_key_website');
+        $service = app(ContentGeneratorService::class);
+        $locale = $service->resolveLocale($validated['locale'] ?? null, $website, $validated['keyword']);
 
         $brief = ContentBrief::create([
             'user_id' => auth()->id(),
             'api_key_website_id' => $website?->id,
             'target_keyword' => $validated['keyword'],
-            'locale' => $validated['locale'] ?? 'id',
+            'locale' => $locale,
             'status' => 'pending',
         ]);
 
@@ -190,15 +194,18 @@ class ToolApiController extends Controller
             'link_sources' => 'nullable|array|max:50',
             'link_sources.*' => 'nullable',
             'target_words' => 'nullable|integer|min:100|max:10000',
+            'include_external_links' => 'nullable|boolean',
         ]);
 
         $website = $request->attributes->get('api_key_website');
+        $service = app(ContentGeneratorService::class);
+        $locale = $service->resolveLocale($validated['locale'] ?? null, $website, $validated['keyword']);
 
         $generation = ContentGeneration::create([
             'user_id' => auth()->id(),
             'api_key_website_id' => $website?->id,
             'target_keyword' => $validated['keyword'],
-            'locale' => $validated['locale'] ?? 'id',
+            'locale' => $locale,
             'tone' => $validated['tone'] ?? 'informative',
             'lsi_keywords' => $validated['lsi_keywords'] ?? [],
             'entities' => $validated['entities'] ?? [],
@@ -207,6 +214,7 @@ class ToolApiController extends Controller
             'keyword_research_id' => $validated['keyword_research_id'] ?? null,
             'content_brief_id' => $validated['content_brief_id'] ?? null,
             'target_words' => $validated['target_words'] ?? null,
+            'include_external_links' => $validated['include_external_links'] ?? null,
             'status' => 'draft',
             'current_phase' => 0,
         ]);
@@ -240,15 +248,18 @@ class ToolApiController extends Controller
             'link_sources' => 'nullable|array|max:50',
             'link_sources.*' => 'nullable',
             'target_words' => 'nullable|integer|min:100|max:10000',
+            'include_external_links' => 'nullable|boolean',
         ]);
 
         $website = $request->attributes->get('api_key_website');
+        $service = app(ContentGeneratorService::class);
+        $locale = $service->resolveLocale($validated['locale'] ?? null, $website, $validated['keyword']);
 
         $generation = ContentGeneration::create([
             'user_id' => auth()->id(),
             'api_key_website_id' => $website?->id,
             'target_keyword' => $validated['keyword'],
-            'locale' => $validated['locale'] ?? 'id',
+            'locale' => $locale,
             'tone' => $validated['tone'] ?? 'informative',
             'lsi_keywords' => $validated['lsi_keywords'] ?? [],
             'entities' => $validated['entities'] ?? [],
@@ -256,6 +267,7 @@ class ToolApiController extends Controller
             'business_profile_id' => $validated['business_profile_id'] ?? null,
             'content_brief_id' => $validated['content_brief_id'] ?? null,
             'target_words' => $validated['target_words'] ?? null,
+            'include_external_links' => $validated['include_external_links'] ?? null,
             'phase_1_content' => $validated['content'],
             'status' => 'draft',
             'current_phase' => 1,
@@ -320,6 +332,11 @@ class ToolApiController extends Controller
                 $businessProfile = \App\Models\BusinessProfile::find($generation->business_profile_id);
             }
 
+            $website = null;
+            if ($generation->api_key_website_id) {
+                $website = \App\Models\ApiKeyWebsite::find($generation->api_key_website_id);
+            }
+
             $content = app(ContentGeneratorService::class)->generatePhase3(
                 $generation->phase_1_content,
                 $questions,
@@ -331,7 +348,9 @@ class ToolApiController extends Controller
                 $generation->target_words,
                 null,
                 $generation->link_sources ?? [],
-                $businessProfile
+                $businessProfile,
+                $generation->include_external_links,
+                $website
             );
 
             $generation->update([

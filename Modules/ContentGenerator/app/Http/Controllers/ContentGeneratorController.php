@@ -174,6 +174,7 @@ class ContentGeneratorController extends Controller
             'lsi_keywords.*' => 'nullable',
             'entities' => 'nullable|array|max:30',
             'entities.*' => 'nullable',
+            'include_external_links' => 'nullable|boolean',
         ]);
 
         $lsiKeywords = $validated['lsi_keywords'] ?? [];
@@ -188,15 +189,19 @@ class ContentGeneratorController extends Controller
             }
         }
 
+        $service = app(\Modules\ContentGenerator\Services\ContentGeneratorService::class);
+        $locale = $service->resolveLocale($validated['locale'] ?? null, null, $validated['target_keyword']);
+
         $generation = ContentGeneration::create([
             'user_id' => auth()->id(),
             'target_keyword' => $validated['target_keyword'],
-            'locale' => $validated['locale'] ?? 'id',
+            'locale' => $locale,
             'tone' => $validated['tone'] ?? 'informative',
             'keyword_research_id' => $validated['keyword_research_id'] ?? null,
             'business_profile_id' => $validated['business_profile_id'] ?? null,
             'lsi_keywords' => $lsiKeywords,
             'entities' => $entities,
+            'include_external_links' => $request->has('include_external_links') ? (bool) $request->input('include_external_links') : null,
             'status' => 'draft',
             'current_phase' => 0,
         ]);
