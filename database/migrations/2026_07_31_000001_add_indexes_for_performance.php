@@ -9,13 +9,17 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $isMySql = Schema::getConnection()->getDriverName() === 'mysql';
+
         // ── api_keys ──
         Schema::table('api_keys', function (Blueprint $table) {
             $table->index('user_id', 'idx_api_keys_user_id');
             $table->index(['is_active', 'expires_at'], 'idx_api_keys_active_expires');
         });
 
-        DB::statement('ALTER TABLE api_keys MODIFY key_prefix TEXT NULL');
+        if ($isMySql) {
+            DB::statement('ALTER TABLE api_keys MODIFY key_prefix TEXT NULL');
+        }
 
         // Backfill: decrypt key_encrypted → key_prefix if missing/short
         $keys = DB::table('api_keys')->whereNotNull('key_encrypted')->where(function ($q) {
@@ -82,11 +86,15 @@ return new class extends Migration
 
     public function down(): void
     {
+        $isMySql = Schema::getConnection()->getDriverName() === 'mysql';
+
         Schema::table('api_keys', function (Blueprint $table) {
             $table->text('key_encrypted')->nullable()->after('key');
         });
 
-        DB::statement('ALTER TABLE api_keys MODIFY key_prefix VARCHAR(14) NULL');
+        if ($isMySql) {
+            DB::statement('ALTER TABLE api_keys MODIFY key_prefix VARCHAR(14) NULL');
+        }
 
         Schema::table('api_keys', function (Blueprint $table) {
             $table->dropIndex('idx_api_keys_user_id');

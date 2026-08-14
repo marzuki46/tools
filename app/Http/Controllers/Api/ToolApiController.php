@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Tools\Tool;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
 use Modules\ContentGenerator\Jobs\ProcessContentBriefJob;
 use Modules\ContentGenerator\Jobs\ProcessContentGenerationJob;
@@ -188,9 +189,9 @@ class ToolApiController extends Controller
             'lsi_keywords.*' => 'nullable',
             'entities' => 'nullable|array|max:30',
             'entities.*' => 'nullable',
-            'business_profile_id' => 'nullable|integer|exists:business_profiles,id',
-            'keyword_research_id' => 'nullable|integer|exists:keyword_researches,id',
-            'content_brief_id' => 'nullable|integer|exists:content_briefs,id',
+            'business_profile_id' => $this->businessProfileIdRule($request),
+            'keyword_research_id' => $this->keywordResearchIdRule($request),
+            'content_brief_id' => $this->contentBriefIdRule($request),
             'link_sources' => 'nullable|array|max:50',
             'link_sources.*' => 'nullable',
             'target_words' => 'nullable|integer|min:100|max:10000',
@@ -243,8 +244,8 @@ class ToolApiController extends Controller
             'lsi_keywords.*' => 'nullable',
             'entities' => 'nullable|array|max:30',
             'entities.*' => 'nullable',
-            'business_profile_id' => 'nullable|integer|exists:business_profiles,id',
-            'content_brief_id' => 'nullable|integer|exists:content_briefs,id',
+            'business_profile_id' => $this->businessProfileIdRule($request),
+            'content_brief_id' => $this->contentBriefIdRule($request),
             'link_sources' => 'nullable|array|max:50',
             'link_sources.*' => 'nullable',
             'target_words' => 'nullable|integer|min:100|max:10000',
@@ -415,5 +416,31 @@ class ToolApiController extends Controller
             ]);
             return response()->json(['success' => false, 'message' => 'Failed to generate meta.'], 500);
         }
+    }
+
+    private function businessProfileIdRule(Request $request)
+    {
+        $website = $request->attributes->get('api_key_website');
+
+        return ['nullable', 'integer', Rule::exists('business_profiles', 'id')->where(function ($query) use ($website) {
+            $query->where('user_id', auth()->id())
+                ->where('is_active', true);
+
+            if ($website) {
+                $query->where('api_key_website_id', $website->id);
+            }
+        })];
+    }
+
+    private function keywordResearchIdRule(Request $request)
+    {
+        return ['nullable', 'integer', Rule::exists('keyword_researches', 'id')
+            ->where('user_id', auth()->id())];
+    }
+
+    private function contentBriefIdRule(Request $request)
+    {
+        return ['nullable', 'integer', Rule::exists('content_briefs', 'id')
+            ->where('user_id', auth()->id())];
     }
 }

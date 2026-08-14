@@ -8,6 +8,7 @@ class BusinessProfile extends Model
 {
     protected $fillable = [
         'user_id',
+        'api_key_website_id',
         'name',
         'business_name',
         'website_url',
@@ -36,6 +37,11 @@ class BusinessProfile extends Model
         return $this->belongsTo(\App\Models\User::class);
     }
 
+    public function website()
+    {
+        return $this->belongsTo(\App\Models\ApiKeyWebsite::class, 'api_key_website_id');
+    }
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
@@ -44,6 +50,18 @@ class BusinessProfile extends Model
     public function scopeForUser($query, int $userId)
     {
         return $query->where('user_id', $userId);
+    }
+
+    public function scopeForWebsite($query, int $websiteId)
+    {
+        return $query->where('api_key_website_id', $websiteId);
+    }
+
+    public function scopeForWebsiteValue($query, ?int $websiteId)
+    {
+        return $websiteId
+            ? $query->where('api_key_website_id', $websiteId)
+            : $query->whereNull('api_key_website_id');
     }
 
     public function toPromptContext(): string

@@ -105,25 +105,31 @@ class BusinessProfileController extends Controller
     public function apiList(Request $request)
     {
         $userId = $request->user()->id ?? auth()->id();
-        $profiles = BusinessProfile::forUser($userId)->active()->get()->map(fn($p) => [
-            'id' => $p->id,
-            'name' => $p->name,
-            'business_name' => $p->business_name,
-            'website_url' => $p->website_url,
-            'description' => $p->description,
-            'products_services' => $p->products_services,
-            'target_audience' => $p->target_audience,
-            'usp' => $p->usp,
-            'writing_rules' => $p->writing_rules,
-            'business_hours' => $p->business_hours,
-            'contact_email' => $p->contact_email,
-            'contact_phone' => $p->contact_phone,
-            'address' => $p->address,
-            'social_media' => $p->social_media,
-            'is_default' => $p->is_default,
-        ]);
+        $website = $request->attributes->get('api_key_website');
 
-        return response()->json(['data' => $profiles]);
+        $profile = BusinessProfile::forUser($userId)->active()
+->forWebsiteValue($website?->id)
+            ->first();
+
+        $data = $profile ? [[
+            'id' => $profile->id,
+            'name' => $profile->name,
+            'business_name' => $profile->business_name,
+            'website_url' => $profile->website_url,
+            'description' => $profile->description,
+            'products_services' => $profile->products_services,
+            'target_audience' => $profile->target_audience,
+            'usp' => $profile->usp,
+            'writing_rules' => $profile->writing_rules,
+            'business_hours' => $profile->business_hours,
+            'contact_email' => $profile->contact_email,
+            'contact_phone' => $profile->contact_phone,
+            'address' => $profile->address,
+            'social_media' => $profile->social_media,
+            'is_default' => $profile->is_default,
+        ]] : [];
+
+        return response()->json(['data' => $data]);
     }
 
     public function apiStore(Request $request): JsonResponse
@@ -146,23 +152,36 @@ class BusinessProfileController extends Controller
         ]);
 
         $userId = $request->user()->id;
+        $website = $request->attributes->get('api_key_website');
 
-        if ($request->boolean('is_default')) {
-            BusinessProfile::forUser($userId)->update(['is_default' => false]);
-        }
+        $existing = BusinessProfile::forUser($userId)->forWebsiteValue($website?->id)->first();
 
         $validated['user_id'] = $userId;
+        $validated['api_key_website_id'] = $website?->id;
         $validated['is_default'] = $request->boolean('is_default');
 
-        $profile = BusinessProfile::create($validated);
+        if ($existing) {
+            $existing->update($validated);
+            $profile = $existing->fresh();
+            $message = 'Profil bisnis berhasil diperbarui.';
+            $status = 200;
+        } else {
+            if ($request->boolean('is_default')) {
+                BusinessProfile::forUser($userId)->forWebsiteValue($website?->id)->update(['is_default' => false]);
+            }
+            $profile = BusinessProfile::create($validated);
+            $message = 'Profil bisnis berhasil dibuat.';
+            $status = 201;
+        }
 
-        return response()->json(['success' => true, 'message' => 'Profil bisnis berhasil dibuat.', 'data' => $profile], 201);
+        return response()->json(['success' => true, 'message' => $message, 'data' => $profile], $status);
     }
 
     public function apiUpdate(Request $request, BusinessProfile $businessProfile): JsonResponse
     {
         $userId = $request->user()->id;
-        if ($businessProfile->user_id !== $userId) {
+        $website = $request->attributes->get('api_key_website');
+        if ($businessProfile->user_id !== $userId || ($website && $businessProfile->api_key_website_id !== $website->id)) {
             return response()->json(['success' => false, 'message' => 'You do not own this profile.'], 403);
         }
 
@@ -184,7 +203,10 @@ class BusinessProfileController extends Controller
         ]);
 
         if ($request->boolean('is_default')) {
-            BusinessProfile::forUser($userId)->where('id', '!=', $businessProfile->id)->update(['is_default' => false]);
+            BusinessProfile::forUser($userId)
+                ->where('api_key_website_id', $website?->id)
+                ->where('id', '!=', $businessProfile->id)
+                ->update(['is_default' => false]);
         }
 
         $validated['is_default'] = $request->boolean('is_default');
@@ -195,7 +217,8 @@ class BusinessProfileController extends Controller
 
     public function apiDestroy(Request $request, BusinessProfile $businessProfile): JsonResponse
     {
-        if ($businessProfile->user_id !== $request->user()->id) {
+        $website = $request->attributes->get('api_key_website');
+        if ($businessProfile->user_id !== $request->user()->id || ($website && $businessProfile->api_key_website_id !== $website->id)) {
             return response()->json(['success' => false, 'message' => 'You do not own this profile.'], 403);
         }
 

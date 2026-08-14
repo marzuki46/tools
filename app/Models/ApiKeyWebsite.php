@@ -9,6 +9,10 @@ class ApiKeyWebsite extends Model
 {
     protected $table = 'api_key_website';
 
+    protected $attributes = [
+        'is_active' => true,
+    ];
+
     protected $fillable = [
         'api_key_id',
         'domain',
