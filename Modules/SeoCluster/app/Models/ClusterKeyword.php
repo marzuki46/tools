@@ -16,6 +16,7 @@ class ClusterKeyword extends Model
         'keyword_research_id',
         'content_generation_id',
         'post_url',
+        'wp_post_id',
         'published_at',
         'error_message',
         'priority',

@@ -28,4 +28,9 @@ return [
         'max_retries' => (int) env('SEO_CLUSTER_MAX_RETRIES', 3),
         'cycle_minutes' => (int) env('SEO_CLUSTER_CYCLE_MINUTES', 30),
     ],
+
+    'silo' => [
+        'url_pattern' => env('SEO_CLUSTER_URL_PATTERN', '{url}/{slug}/'),
+        'pillar_target_words' => (int) env('SEO_CLUSTER_PILLAR_TARGET_WORDS', 2000),
+    ],
 ];

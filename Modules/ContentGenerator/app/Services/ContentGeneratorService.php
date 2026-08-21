@@ -178,7 +178,7 @@ PROMPT;
         return $questions ?: $this->fallbackQuestions($keyword);
     }
 
-    public function generatePhase3(string $phase1Content, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, ?array $brief = null, array $linkSources = [], ?\App\Models\BusinessProfile $businessProfile = null, ?bool $includeExternalLinks = null, ?\App\Models\ApiKeyWebsite $website = null): string
+    public function generatePhase3(string $phase1Content, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, ?array $brief = null, array $linkSources = [], ?\App\Models\BusinessProfile $businessProfile = null, ?bool $includeExternalLinks = null, ?\App\Models\ApiKeyWebsite $website = null, string $contentType = 'post'): string
     {
         $plainText = strip_tags($phase1Content);
         $effectiveLocale = $this->resolveLocale($locale, $website, $plainText);
@@ -190,7 +190,7 @@ PROMPT;
         $maxRetries = max(1, (int) $this->cfg('ai_slop.max_retries', 2));
         $autoFix = (bool) $this->cfg('ai_slop.auto_fix_banned_words', false);
 
-        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $targetWords, $briefText, $linkSources, $businessText, $includeExternalLinks);
+        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $targetWords, $briefText, $linkSources, $businessText, $includeExternalLinks, $contentType);
         $content = $this->processContent($this->callAI($prompt));
 
         $attempt = 1;
@@ -360,6 +360,16 @@ PROMPT;
         return "JANGAN sertakan tautan eksternal sama sekali. Hanya gunakan tautan internal dari daftar jika tersedia.";
     }
 
+    private function contentTypeRule(string $contentType): string
+    {
+        return match ($contentType) {
+            'product' => 'Buat DESKRIPSI PRODUK untuk WooCommerce — BUKAN artikel blog. Gaya persuasif: manfaat utama, keunggulan, spesifikasi/bahan/ukuran (jika relevan), cara pakai singkat, dan ajakan membeli. Struktur bebas dengan sub-judul (##) yang menjual, bukan struktur artikel berita.',
+            'product_cat' => 'Buat DESKRIPSI KATEGORI PRODUK untuk halaman arsip WooCommerce. Jelaskan tema/koleksi kategori ini, manfaat berbelanja di kategori ini, jenis produk yang tersedia, dan panduan singkat memilih. Akhiri dengan ajakan menjelajahi produk di kategori ini.',
+            'tag' => 'Buat DESKRIPSI TAG untuk halaman arsip tag. Perkenalkan topik tag secara menarik, jelaskan hubungannya dengan konten lain di situs, dan apa yang pembaca temukan di arsip ini.',
+            default => 'Buat ARTIKEL LENGKAP seperti artikel di blog atau portal berita — BUKAN catatan, BUKAN poin-poin, BUKAN outline.',
+        };
+    }
+
     private function antiSlopRuleBlock(string $locale): string
     {
         if ($locale !== 'en') {
@@ -404,7 +414,7 @@ Return ONLY valid JSON array of objects, no markdown:
 PROMPT;
     }
 
-    private function buildPhase3Prompt(string $phase1Text, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, string $briefText = '', array $linkSources = [], string $businessText = '', ?bool $includeExternalLinks = null): string
+    private function buildPhase3Prompt(string $phase1Text, array $questions, string $keyword, string $locale = 'id', string $tone = 'informative', array $lsiKeywords = [], array $entities = [], ?int $targetWords = null, string $briefText = '', array $linkSources = [], string $businessText = '', ?bool $includeExternalLinks = null, string $contentType = 'post'): string
     {
         $questionsText = '';
         foreach ($questions as $q) {
@@ -465,14 +475,19 @@ PROMPT;
         }
         if ($linkText !== '') {
             $linkText = rtrim($linkText, "\n");
+            $linkRule = "SUMBER TAUTAN INTERNAL (HANYA BOLEH memakai URL dari daftar ini — pilih 3-5 yang paling relevan, tautkan dengan anchor text natural di tengah kalimat):\n{$linkText}\n\nATURAN TAUTAN INTERNAL (WAJIB):\n- DILARANG KERAS membuat, menebak, atau mengarang URL internal lain yang tidak ada di daftar di atas.\n- Jika tidak ada yang relevan sama sekali, jangan buat tautan internal.\n- URL harus ditulis PERSIS seperti di daftar.\n- Aturan ini berlaku apa pun bahasa konten.";
+        } else {
+            $linkRule = "TAUTAN INTERNAL: Tidak ada daftar URL internal yang tersedia. JANGAN membuat tautan internal apa pun. Jangan mengarang URL. Aturan ini berlaku apa pun bahasa konten.";
         }
+        $typeRule = $this->contentTypeRule($contentType);
         $externalLinkRule = $this->externalLinkRule($includeExternalLinks);
         $slopRule = $this->antiSlopRuleBlock($locale);
 
         return <<<PROMPT
-Anda adalah penulis konten profesional. Buat ARTIKEL LENGKAP seperti artikel di blog atau portal berita — BUKAN catatan, BUKAN poin-poin, BUKAN outline.
+Anda adalah penulis konten profesional. {$typeRule}
 
 {$langRule}
+SEMUA ATURAN DALAM PROMPT INI WAJIB DIPATUHI APA PUN BAHASA KONTEN YANG DIMINTA.
 
 Target Keyword: {$keyword}
 Bahasa: {$langName}
@@ -492,8 +507,7 @@ LSI Keywords (wajib digunakan secara natural):
 Entities (sematkan dalam konteks yang relevan):
 {$entityText}
 
-SUMBER TAUTAN INTERNAL (wajib: pilih MINIMAL 3 yang paling relevan dengan topik, lalu tautkan dengan anchor text natural di tengah kalimat):
-{$linkText}
+{$linkRule}
 
 STRUKTUR WAJIB:
 Hanya satu `# ` untuk judul utama di awal
@@ -642,16 +656,16 @@ PROMPT;
 
         if ($decoded && isset($decoded['title'], $decoded['description'])) {
             return [
-                'title' => mb_substr(trim($decoded['title']), 0, 65),
-                'description' => mb_substr(trim($decoded['description']), 0, 165),
+                'title' => \App\Support\SeoText::capTitle(trim($decoded['title']), 60, $keyword),
+                'description' => \App\Support\SeoText::capDescription(trim($decoded['description']), 160),
             ];
         }
 
         preg_match('/"title"\s*:\s*"([^"]+)"/', $cleaned, $t);
         preg_match('/"description"\s*:\s*"([^"]+)"/', $cleaned, $d);
         return [
-            'title' => mb_substr(trim($t[1] ?? $keyword), 0, 65),
-            'description' => mb_substr(trim($d[1] ?? substr($plainText, 0, 160)), 0, 165),
+            'title' => \App\Support\SeoText::capTitle(trim($t[1] ?? $keyword), 60, $keyword),
+            'description' => \App\Support\SeoText::capDescription(trim($d[1] ?? substr($plainText, 0, 160)), 160),
         ];
     }
 

@@ -70,6 +70,15 @@ class InternalLinkService
         return $content;
     }
 
+    public function injectSingleLink(string $content, string $keyword, string $url, string $anchorText): string
+    {
+        if (!$keyword || !$url) {
+            return $content;
+        }
+
+        return $this->linkFirstOccurrence($content, $keyword, $url, $anchorText);
+    }
+
     protected function linkFirstOccurrence(string $content, string $keyword, string $url, string $anchorText): string
     {
         $matches = [];

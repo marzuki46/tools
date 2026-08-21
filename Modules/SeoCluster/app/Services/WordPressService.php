@@ -74,7 +74,7 @@ class WordPressService
         }
     }
 
-    public function publishPost(string $title, string $content, array $meta = []): array
+    public function publishPost(string $title, string $content, array $meta = [], ?string $localDateTime = null): array
     {
         $data = [
             'title' => $title,
@@ -86,6 +86,13 @@ class WordPressService
             'tags' => $meta['tags'] ?? null,
             'comment_status' => 'closed',
         ];
+
+        // Tanggal lokal situs WP: masa lalu = terbit mundur (backdate),
+        // masa depan = otomatis jadi jadwal (status future di WordPress)
+        if ($localDateTime) {
+            $data['date'] = $localDateTime;
+            $data['status'] = strtotime($localDateTime) > time() ? 'future' : 'publish';
+        }
 
         $data = array_filter($data, fn ($v) => $v !== null);
 
@@ -222,11 +229,22 @@ class WordPressService
 
     public function createSlug(string $text): string
     {
-        $text = strtolower(trim($text));
-        $text = preg_replace('/[^a-z0-9\s-]/', '', $text);
-        $text = preg_replace('/[\s_]+/', '-', $text);
-        $text = preg_replace('/-+/', '-', $text);
+        return \App\Support\SeoText::slugify($text);
+    }
 
-        return trim($text, '-') ?: 'artikel-' . now()->timestamp;
+    public function baseUrl(): string
+    {
+        $this->credentials();
+        return $this->baseUrl ?? '';
+    }
+
+    public function updatePost(int $postId, array $data): array
+    {
+        $post = $this->request('POST', "posts/{$postId}", $data);
+
+        return [
+            'id' => $post['id'] ?? null,
+            'url' => $post['link'] ?? null,
+        ];
     }
 }

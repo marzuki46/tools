@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Tools\Tool;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
 use Modules\ContentGenerator\Jobs\ProcessContentBriefJob;
@@ -31,6 +32,13 @@ class ToolApiController extends Controller
             'regen-phase3' => 'handleContentRegenPhase3',
             'brief' => 'handleContentBrief',
             'brief-status' => 'handleContentBriefStatus',
+        ],
+        'keyword-clusters' => [
+            'list' => 'handleClusterList',
+            'create' => 'handleClusterCreate',
+            'show' => 'handleClusterShow',
+            'activate' => 'handleClusterActivate',
+            'pause' => 'handleClusterPause',
         ],
     ];
 
@@ -185,6 +193,7 @@ class ToolApiController extends Controller
             'keyword' => 'required|string|max:255',
             'locale' => 'nullable|string|max:10',
             'tone' => 'nullable|string|max:50',
+            'content_type' => ['nullable', 'string', 'max:30', Rule::in(['post', 'page', 'product', 'product_cat', 'tag'])],
             'lsi_keywords' => 'nullable|array|max:50',
             'lsi_keywords.*' => 'nullable',
             'entities' => 'nullable|array|max:30',
@@ -208,6 +217,7 @@ class ToolApiController extends Controller
             'target_keyword' => $validated['keyword'],
             'locale' => $locale,
             'tone' => $validated['tone'] ?? 'informative',
+            'content_type' => $validated['content_type'] ?? 'post',
             'lsi_keywords' => $validated['lsi_keywords'] ?? [],
             'entities' => $validated['entities'] ?? [],
             'link_sources' => $validated['link_sources'] ?? [],
@@ -240,6 +250,7 @@ class ToolApiController extends Controller
             'keyword' => 'required|string|max:255',
             'locale' => 'nullable|string|max:10',
             'tone' => 'nullable|string|max:50',
+            'content_type' => ['nullable', 'string', 'max:30', Rule::in(['post', 'page', 'product', 'product_cat', 'tag'])],
             'lsi_keywords' => 'nullable|array|max:50',
             'lsi_keywords.*' => 'nullable',
             'entities' => 'nullable|array|max:30',
@@ -262,6 +273,7 @@ class ToolApiController extends Controller
             'target_keyword' => $validated['keyword'],
             'locale' => $locale,
             'tone' => $validated['tone'] ?? 'informative',
+            'content_type' => $validated['content_type'] ?? 'post',
             'lsi_keywords' => $validated['lsi_keywords'] ?? [],
             'entities' => $validated['entities'] ?? [],
             'link_sources' => $validated['link_sources'] ?? [],
@@ -416,6 +428,136 @@ class ToolApiController extends Controller
             ]);
             return response()->json(['success' => false, 'message' => 'Failed to generate meta.'], 500);
         }
+    }
+
+    private function handleClusterList(Request $request): JsonResponse
+    {
+        $clusters = \Modules\SeoCluster\Models\KeywordCluster::where('user_id', auth()->id())
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'parent_keyword' => $c->parent_keyword,
+                'status' => $c->status,
+                'schedule' => $c->schedule,
+                'progress' => $c->progress(),
+                'pillar_post_url' => $c->pillar_post_url,
+                'created_at' => $c->created_at?->toIso8601String(),
+            ]);
+
+        return response()->json(['success' => true, 'data' => $clusters]);
+    }
+
+    private function handleClusterCreate(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'topic' => 'required|string|max:255',
+            'parent_count' => 'nullable|integer|min:1|max:10',
+            'child_count' => 'nullable|integer|min:1|max:15',
+            'url_template' => 'nullable|string|max:500',
+            'publish_start' => 'nullable|date_format:Y-m-d',
+            'publish_end' => 'nullable|date_format:Y-m-d|after_or_equal:publish_start',
+            'tz_offset' => 'nullable|numeric|between:-12,14',
+        ]);
+
+        if (!empty($validated['publish_start']) && !empty($validated['publish_end'])) {
+            $rangeDays = Carbon::parse($validated['publish_start'])->diffInDays(Carbon::parse($validated['publish_end']));
+            if ($rangeDays > 730) {
+                return response()->json(['success' => false, 'message' => 'Rentang tanggal maksimal 2 tahun.'], 422);
+            }
+        }
+
+        $service = app(\Modules\SeoCluster\Services\ClusterStructureService::class);
+
+        try {
+            $clusters = $service->generateStructure(
+                auth()->id(),
+                $validated['topic'],
+                (int) ($validated['parent_count'] ?? 4),
+                (int) ($validated['child_count'] ?? 4),
+            );
+        } catch (\Exception $e) {
+            Log::warning('Cluster structure generation failed', ['error' => $e->getMessage()]);
+            return response()->json(['success' => false, 'message' => 'Gagal membuat struktur SILO: ' . $e->getMessage()], 500);
+        }
+
+        // Selalu simpan: template valid, atau string kosong (permalink Plain = tanpa prediksi URL)
+        $urlTemplate = str_contains($validated['url_template'] ?? '', '{slug}')
+            ? $validated['url_template']
+            : '';
+
+        $schedule = [
+            'url_template' => $urlTemplate,
+            'publish_start' => $validated['publish_start'] ?? null,
+            'publish_end' => $validated['publish_end'] ?? null,
+            'tz_offset' => isset($validated['tz_offset']) ? (float) $validated['tz_offset'] : 7,
+        ];
+        foreach ($clusters as $cluster) {
+            $cluster->update($schedule);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => count($clusters) . ' cluster SILO dibuat.',
+            'data' => collect($clusters)->map(fn ($c) => [
+                'id' => $c->id,
+                'name' => $c->name,
+                'parent_keyword' => $c->parent_keyword,
+                'status' => $c->status,
+                'total_keywords' => $c->total_keywords,
+                'url_template' => $c->url_template,
+            ]),
+        ], 201);
+    }
+
+    private function handleClusterShow(Request $request): JsonResponse
+    {
+        $request->validate(['id' => 'required|integer']);
+
+        $cluster = \Modules\SeoCluster\Models\KeywordCluster::where('user_id', auth()->id())
+            ->with('keywords:id,cluster_id,keyword,status,post_url,published_at,error_message,retry_count')
+            ->findOrFail($request->id);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $cluster->id,
+                'name' => $cluster->name,
+                'parent_keyword' => $cluster->parent_keyword,
+                'description' => $cluster->description,
+                'status' => $cluster->status,
+                'schedule' => $cluster->schedule,
+                'progress' => $cluster->progress(),
+                'pillar_post_url' => $cluster->pillar_post_url,
+                'url_template' => $cluster->url_template,
+                'publish_start' => $cluster->publish_start,
+                'publish_end' => $cluster->publish_end,
+                'image_enabled' => $cluster->image_enabled,
+                'keywords' => $cluster->keywords,
+                'created_at' => $cluster->created_at?->toIso8601String(),
+            ],
+        ]);
+    }
+
+    private function handleClusterActivate(Request $request): JsonResponse
+    {
+        $request->validate(['id' => 'required|integer']);
+
+        $cluster = \Modules\SeoCluster\Models\KeywordCluster::where('user_id', auth()->id())->findOrFail($request->id);
+        app(\Modules\SeoCluster\Services\ClusterService::class)->activateCluster($cluster->id);
+
+        return response()->json(['success' => true, 'message' => 'Cluster diaktifkan.']);
+    }
+
+    private function handleClusterPause(Request $request): JsonResponse
+    {
+        $request->validate(['id' => 'required|integer']);
+
+        $cluster = \Modules\SeoCluster\Models\KeywordCluster::where('user_id', auth()->id())->findOrFail($request->id);
+        app(\Modules\SeoCluster\Services\ClusterService::class)->pauseCluster($cluster->id);
+
+        return response()->json(['success' => true, 'message' => 'Cluster dijeda.']);
     }
 
     private function businessProfileIdRule(Request $request)

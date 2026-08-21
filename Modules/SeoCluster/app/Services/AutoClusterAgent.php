@@ -151,10 +151,14 @@ class AutoClusterAgent
 
         $published = $this->stepPublish($cluster, $keyword, $generationId, $content);
 
-        $this->stepPing($cluster, $keyword, $published['url']);
+        // Artikel berjadwal (future) belum live — jangan di-ping
+        if (($published['status'] ?? '') !== 'future') {
+            $this->stepPing($cluster, $keyword, $published['url']);
+        }
 
         $this->clusterService->updateKeywordStatus($keyword->id, 'published', [
             'post_url' => $published['url'],
+            'wp_post_id' => $published['id'] ?? null,
         ]);
 
         $this->recordAnalytics($cluster, $keyword, $generationId, $published, $started);
@@ -221,15 +225,18 @@ class AutoClusterAgent
         $start = microtime(true);
 
         $research = KeywordResearch::find($researchId);
+        $linkSources = $this->getSiloLinkSources($cluster, $keyword->id);
 
         $generation = ContentGeneration::create([
             'user_id' => $cluster->user_id,
             'target_keyword' => $keyword->keyword,
             'locale' => 'id',
             'tone' => 'informative',
+            'content_type' => 'post',
             'keyword_research_id' => $researchId,
             'lsi_keywords' => $research->lsi_keywords ?? [],
             'entities' => $research->entities ?? [],
+            'link_sources' => $linkSources,
             'status' => 'draft',
             'current_phase' => 0,
         ]);
@@ -256,6 +263,9 @@ class AutoClusterAgent
                 'informative',
                 $research->lsi_keywords ?? [],
                 $research->entities ?? [],
+                null,
+                null,
+                $linkSources
             );
             $generation->update(['phase_3_content' => $final, 'current_phase' => 3, 'status' => 'phase_3']);
 
@@ -323,6 +333,9 @@ class AutoClusterAgent
                     'informative',
                     $research->lsi_keywords ?? [],
                     $research->entities ?? [],
+                    null,
+                    null,
+                    $generation->link_sources ?? []
                 );
                 $generation->update(['phase_3_content' => $regenerated]);
 
@@ -401,8 +414,13 @@ class AutoClusterAgent
         $start = microtime(true);
 
         try {
-            $existingPosts = $this->wpService->getExistingPosts(100);
-            $opportunities = $this->linkService->findLinkOpportunities($content, $existingPosts);
+            $siloPosts = collect($this->getSiloLinkSources($cluster, $keyword->id))
+                ->filter(fn ($s) => !empty($s['url']))
+                ->map(fn ($s) => ['title' => $s['title'], 'url' => $s['url']])
+                ->values()
+                ->all();
+
+            $opportunities = $this->linkService->findLinkOpportunities($content, $siloPosts);
             $content = $this->linkService->injectLinks($content, $opportunities, 2);
 
             $this->clusterService->logAutomation(
@@ -428,7 +446,11 @@ class AutoClusterAgent
 
         $generation = ContentGeneration::find($generationId);
 
-        $title = $generation->meta_title ?: $keyword->keyword;
+        $title = \App\Support\SeoText::capTitle(
+            $generation->meta_title ?: $keyword->keyword,
+            70,
+            $keyword->keyword
+        );
 
         $meta = [
             'slug' => $this->wpService->createSlug($keyword->keyword),
@@ -444,8 +466,13 @@ class AutoClusterAgent
             Log::warning('AutoClusterAgent: kategori tidak dibuat', ['error' => $e->getMessage()]);
         }
 
+        // Jadwal terbit: sebar merata dalam rentang tanggal, jam acak jam aktif (08:00-21:59)
+        $siblings = $cluster->keywords()->orderBy('id')->pluck('id')->values();
+        $slotIndex = max(0, (int) $siblings->search($keyword->id));
+        $scheduledAt = $this->scheduleSlotFor($cluster, $slotIndex, max(1, $siblings->count()));
+
         try {
-            $published = $this->wpService->publishPost($title, $content, $meta);
+            $published = $this->wpService->publishPost($title, $content, $meta, $scheduledAt);
         } catch (Exception $e) {
             $message = $e->getMessage();
             $this->clusterService->logAutomation($cluster->id, 'publish', 'failed', $message, keywordId: $keyword->id);
@@ -456,16 +483,49 @@ class AutoClusterAgent
             throw new Exception('Publish gagal: tidak ada URL yang dikembalikan WordPress.');
         }
 
+        $isScheduled = ($published['status'] ?? '') === 'future';
         $this->clusterService->logAutomation(
             $cluster->id,
             'publish',
             'completed',
-            'Artikel terpublish: ' . ($published['url'] ?? '-'),
+            ($isScheduled ? 'Artikel dijadwalkan (' . $scheduledAt . '): ' : 'Artikel terpublish: ') . ($published['url'] ?? '-'),
             (int) round((microtime(true) - $start) * 1000),
             $keyword->id,
         );
 
         return $published;
+    }
+
+    /**
+     * Tanggal terbit untuk slot ke-i dari n artikel: disebar merata
+     * antara publish_start dan publish_end (boleh tanggal lampau).
+     * Jam diacak pada rentang aktif pembaca Indonesia (08:00-21:59),
+     * mengikuti timezone situs via tz_offset.
+     */
+    protected function scheduleSlotFor(KeywordCluster $cluster, int $slotIndex, int $slotTotal): ?string
+    {
+        if (!$cluster->publish_start || !$cluster->publish_end) {
+            return null;
+        }
+
+        $tz = sprintf('+%02d:00', (float) $cluster->tz_offset);
+        $start = \Illuminate\Support\Carbon::parse($cluster->publish_start, $tz)->startOfDay();
+        $end = \Illuminate\Support\Carbon::parse($cluster->publish_end, $tz)->startOfDay();
+
+        if ($end->lt($start)) {
+            return null;
+        }
+
+        $totalDays = (int) $start->diffInDays($end);
+        $dayOffset = $slotTotal <= 1
+            ? 0
+            : (int) floor($slotIndex * ($totalDays + 1) / $slotTotal);
+
+        $date = $start->copy()->addDays(min($dayOffset, $totalDays));
+
+        return $date
+            ->setTime(random_int(8, 21), random_int(0, 59), random_int(0, 59))
+            ->format('Y-m-d H:i:s');
     }
 
     protected function stepPing(KeywordCluster $cluster, ClusterKeyword $keyword, string $postUrl): void
@@ -514,6 +574,49 @@ class AutoClusterAgent
         $this->stats['keywords_published']++;
     }
 
+    protected function getSiloLinkSources(KeywordCluster $cluster, ?int $excludeKeywordId = null): array
+    {
+        $baseUrl = rtrim($this->wpService->baseUrl(), '/');
+        // url_template NULL = dibuat tanpa info permalink (fallback config);
+        // string kosong = situs WP permalink Plain -> jangan prediksi URL
+        $pattern = $cluster->url_template !== null
+            ? (string) $cluster->url_template
+            : (string) config('seo-cluster.silo.url_pattern', '{url}/{slug}/');
+        $canPredict = $pattern !== '' && str_contains($pattern, '{slug}');
+
+        $sources = [];
+
+        if (!empty($cluster->pillar_post_url)) {
+            $sources[] = [
+                'title' => $cluster->parent_keyword,
+                'url' => $cluster->pillar_post_url,
+                'keyword' => $cluster->parent_keyword,
+            ];
+        }
+
+        foreach ($cluster->keywords as $kw) {
+            if ($excludeKeywordId && (int) $kw->id === (int) $excludeKeywordId) {
+                continue;
+            }
+
+            $url = $kw->post_url;
+            if (!$url && $canPredict) {
+                $url = str_replace(['{url}', '{slug}'], [$baseUrl, \App\Support\SeoText::slugify($kw->keyword)], $pattern);
+            }
+            if (!$url) {
+                continue;
+            }
+
+            $sources[] = [
+                'title' => $kw->keyword,
+                'url' => $url,
+                'keyword' => $kw->keyword,
+            ];
+        }
+
+        return $sources;
+    }
+
     protected function markClusterCompleted(KeywordCluster $cluster): void
     {
         $total = $cluster->total_keywords;
@@ -522,6 +625,206 @@ class AutoClusterAgent
         if ($total > 0 && $done >= $total && $cluster->status === 'active') {
             $cluster->update(['status' => 'completed']);
             Log::info('AutoClusterAgent: cluster selesai', ['cluster' => $cluster->id]);
+
+            if (empty($cluster->pillar_post_url)) {
+                try {
+                    $this->generatePillar($cluster);
+                } catch (Exception $e) {
+                    Log::error('AutoClusterAgent: generate pillar gagal', [
+                        'cluster' => $cluster->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                    $this->clusterService->logAutomation(
+                        $cluster->id,
+                        'pillar',
+                        'failed',
+                        mb_substr($e->getMessage(), 0, 500),
+                    );
+                }
+            }
+        }
+    }
+
+    protected function generatePillar(KeywordCluster $cluster): void
+    {
+        $children = ClusterKeyword::where('cluster_id', $cluster->id)
+            ->where('status', 'published')
+            ->whereNotNull('post_url')
+            ->orderBy('id')
+            ->get();
+
+        if ($children->isEmpty()) {
+            $this->clusterService->logAutomation($cluster->id, 'pillar', 'skipped', 'Tidak ada child terpublish, pillar dilewati');
+            return;
+        }
+
+        $this->clusterService->logAutomation($cluster->id, 'pillar', 'started', "Generate artikel pillar '{$cluster->parent_keyword}'");
+        $start = microtime(true);
+
+        $linkSources = $children
+            ->map(fn ($c) => ['title' => $c->keyword, 'url' => $c->post_url, 'keyword' => $c->keyword])
+            ->values()
+            ->all();
+
+        $targetWords = max(800, (int) config('seo-cluster.silo.pillar_target_words', 2000));
+
+        $generation = ContentGeneration::create([
+            'user_id' => $cluster->user_id,
+            'target_keyword' => $cluster->parent_keyword,
+            'locale' => 'id',
+            'tone' => 'informative',
+            'content_type' => 'post',
+            'lsi_keywords' => [],
+            'entities' => [],
+            'link_sources' => $linkSources,
+            'target_words' => $targetWords,
+            'status' => 'draft',
+            'current_phase' => 0,
+        ]);
+
+        try {
+            $phase1 = $this->contentService->generatePhase1(
+                $cluster->parent_keyword . ' panduan lengkap',
+                'id',
+                'informative',
+                [],
+                [],
+                $cluster->user_id,
+                null,
+                $targetWords,
+            );
+            $generation->update(['phase_1_content' => $phase1, 'current_phase' => 1, 'status' => 'phase_1']);
+
+            $questions = $this->contentService->generatePhase2($phase1, $cluster->parent_keyword);
+            $generation->update(['phase_2_questions' => $questions, 'current_phase' => 2, 'status' => 'phase_2']);
+
+            $final = $this->contentService->generatePhase3(
+                $phase1,
+                $questions,
+                $cluster->parent_keyword,
+                'id',
+                'informative',
+                [],
+                [],
+                $targetWords,
+                null,
+                $linkSources
+            );
+
+            if (trim((string) $final) === '') {
+                throw new Exception('Konten pillar kosong');
+            }
+
+            $generation->update(['phase_3_content' => $final, 'current_phase' => 3, 'status' => 'phase_3']);
+        } catch (Exception $e) {
+            $generation->update(['status' => 'failed']);
+            throw new Exception('Generate konten pillar gagal: ' . $e->getMessage());
+        }
+
+        try {
+            $meta = $this->contentService->generateMetaData($final, $cluster->parent_keyword, 'id');
+            $generation->update([
+                'meta_title' => $meta['title'],
+                'meta_description' => $meta['description'],
+            ]);
+        } catch (Exception $e) {
+            Log::warning('AutoClusterAgent: meta pillar gagal, dilewati', ['error' => $e->getMessage()]);
+        }
+
+        $title = \App\Support\SeoText::capTitle(
+            $generation->meta_title ?: $cluster->parent_keyword,
+            70,
+            $cluster->parent_keyword
+        );
+
+        $metaData = [
+            'slug' => $this->wpService->createSlug($cluster->parent_keyword),
+            'excerpt' => $generation->meta_description ?? '',
+        ];
+
+        try {
+            $categoryId = $this->wpService->findOrCreateCategory($cluster->parent_keyword);
+            if ($categoryId) {
+                $metaData['categories'] = [$categoryId];
+            }
+        } catch (Exception $e) {
+            Log::warning('AutoClusterAgent: kategori pillar tidak dibuat', ['error' => $e->getMessage()]);
+        }
+
+        // Pillar terbit di akhir rentang jadwal (setelah semua child), jam acak jam aktif
+        $pillarWhen = null;
+        if ($cluster->publish_start && $cluster->publish_end) {
+            $tz = sprintf('+%02d:00', (float) $cluster->tz_offset);
+            $pillarWhen = \Illuminate\Support\Carbon::parse($cluster->publish_end, $tz)
+                ->endOfDay()
+                ->subHours(random_int(2, 10))
+                ->format('Y-m-d H:i:s');
+        }
+
+        $published = $this->wpService->publishPost($title, $final, $metaData, $pillarWhen);
+
+        if (empty($published['url'])) {
+            throw new Exception('Publish pillar gagal: tidak ada URL dari WordPress.');
+        }
+
+        $generation->update([
+            'status' => 'completed',
+            'tokens_in' => $this->contentService->tokenUsage['tokens_in'],
+            'tokens_out' => $this->contentService->tokenUsage['tokens_out'],
+            'tokens_total' => $this->contentService->tokenUsage['tokens_in'] + $this->contentService->tokenUsage['tokens_out'],
+        ]);
+
+        $cluster->update([
+            'pillar_post_url' => $published['url'],
+            'pillar_generation_id' => $generation->id,
+        ]);
+
+        if (($published['status'] ?? '') !== 'future') {
+            $this->pingService->pingAll($published['url']);
+        }
+
+        $this->clusterService->logAutomation(
+            $cluster->id,
+            'pillar',
+            'completed',
+            (($published['status'] ?? '') === 'future' ? 'Pillar dijadwalkan (' . $pillarWhen . '): ' : 'Pillar terpublish: ') . $published['url'],
+            (int) round((microtime(true) - $start) * 1000),
+        );
+
+        $this->backFillPillarLinks($cluster, $children);
+    }
+
+    protected function backFillPillarLinks(KeywordCluster $cluster, $children): void
+    {
+        if (empty($cluster->pillar_post_url)) {
+            return;
+        }
+
+        foreach ($children as $child) {
+            try {
+                if (!$child->wp_post_id) {
+                    continue;
+                }
+
+                $post = $this->wpService->getPostContent((int) $child->wp_post_id);
+                $updated = $this->linkService->injectSingleLink(
+                    $post['content'] ?? '',
+                    $cluster->parent_keyword,
+                    $cluster->pillar_post_url,
+                    $cluster->parent_keyword
+                );
+
+                if ($updated !== ($post['content'] ?? '')) {
+                    $this->wpService->updatePost((int) $child->wp_post_id, ['content' => $updated]);
+                    $this->clusterService->logAutomation($cluster->id, 'pillar', 'completed', "Back-link pillar ke '{$child->keyword}'");
+                }
+            } catch (Exception $e) {
+                Log::warning('AutoClusterAgent: back-fill link pillar gagal', [
+                    'cluster' => $cluster->id,
+                    'keyword' => $child->keyword,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
     }
 

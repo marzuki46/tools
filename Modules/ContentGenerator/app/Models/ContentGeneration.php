@@ -15,6 +15,7 @@ class ContentGeneration extends Model
         'target_keyword',
         'locale',
         'tone',
+        'content_type',
         'keyword_research_id',
         'business_profile_id',
         'content_brief_id',

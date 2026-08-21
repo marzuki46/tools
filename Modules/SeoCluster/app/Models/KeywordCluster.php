@@ -26,6 +26,12 @@ class KeywordCluster extends Model
         'image_enabled',
         'image_per_article',
         'webp_quality',
+        'pillar_post_url',
+        'pillar_generation_id',
+        'url_template',
+        'publish_start',
+        'publish_end',
+        'tz_offset',
     ];
 
     protected $casts = [

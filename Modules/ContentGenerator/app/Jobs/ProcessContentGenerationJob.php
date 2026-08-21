@@ -115,8 +115,13 @@ class ProcessContentGenerationJob implements ShouldQueue
                     $linkSources,
                     $businessProfile,
                     $this->generation->include_external_links,
-                    $website
+                    $website,
+                    $this->generation->content_type ?? 'post'
                 );
+
+                if (trim((string) $finalContent) === '') {
+                    throw new \RuntimeException('Phase 3 returned empty content');
+                }
 
                 $this->generation->update(['phase_3_content' => $finalContent]);
             }

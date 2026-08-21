@@ -70,11 +70,15 @@ Tugas: dari sebuah topik utama, buatlah struktur keyword cluster sebagai berikut
    - Setiap child keyword mengangkat aspek yang berbeda (cara, panduan, strategi, tips, kesalahan umum, dll).
    - Buat natural, tanpa terdengar kaku atau berulang.
 
+ATURAN PANJANG (WAJIB):
+- Parent dan child keyword MAKSIMAL 60 karakter dan maksimal 8 kata.
+- Keyword harus utuh dan natural — jangan dipotong di tengah frasa.
+
 Contoh topik "Optimasi On-Page SEO" → child keyword:
-- "Cara optimasi meta description untuk meningkatkan CTR di Google"
-- "Panduan struktur heading H1 hingga H6 untuk SEO on-page"
-- "Strategi internal linking untuk meningkatkan otoritas halaman"
-- "Tips optimasi URL structure yang SEO friendly dengan kata kunci target"
+- "Cara optimasi meta description untuk CTR tinggi"
+- "Panduan struktur heading H1 hingga H6"
+- "Strategi internal linking untuk otoritas halaman"
+- "Tips URL structure yang SEO friendly"
 
 Return HANYA JSON valid tanpa markdown dan tanpa komentar:
 {
