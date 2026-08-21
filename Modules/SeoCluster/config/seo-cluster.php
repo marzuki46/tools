@@ -32,5 +32,7 @@ return [
     'silo' => [
         'url_pattern' => env('SEO_CLUSTER_URL_PATTERN', '{url}/{slug}/'),
         'pillar_target_words' => (int) env('SEO_CLUSTER_PILLAR_TARGET_WORDS', 2000),
+        'link_home' => (bool) env('SEO_CLUSTER_LINK_HOME', true),
+        'link_category' => (bool) env('SEO_CLUSTER_LINK_CATEGORY', true),
     ],
 ];

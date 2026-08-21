@@ -4,6 +4,7 @@ namespace Modules\SeoCluster\Services;
 
 use Exception;
 use Illuminate\Support\Facades\Log;
+use App\Models\ApiKeyWebsite;
 use Modules\ContentGenerator\Models\ContentGeneration;
 use Modules\ContentGenerator\Services\ContentGeneratorService;
 use Modules\KeywordResearch\Models\KeywordResearch;
@@ -575,17 +576,64 @@ class AutoClusterAgent
         $this->stats['keywords_published']++;
     }
 
-    protected function getSiloLinkSources(KeywordCluster $cluster, ?int $excludeKeywordId = null): array
+    protected function siloCanPredict(KeywordCluster $cluster): bool
     {
-        $baseUrl = rtrim($this->wpService->baseUrl(), '/');
         // url_template NULL = dibuat tanpa info permalink (fallback config);
         // string kosong = situs WP permalink Plain -> jangan prediksi URL
         $pattern = $cluster->url_template !== null
             ? (string) $cluster->url_template
             : (string) config('seo-cluster.silo.url_pattern', '{url}/{slug}/');
-        $canPredict = $pattern !== '' && str_contains($pattern, '{slug}');
+
+        return $pattern !== '' && str_contains($pattern, '{slug}');
+    }
+
+    /**
+     * Sumber tautan kontekstual untuk semua artikel silo:
+     * Beranda (anchor nama brand/situs) dan halaman Kategori (anchor nama kategori).
+     */
+    protected function siloContextSources(KeywordCluster $cluster, bool $canPredict): array
+    {
+        $baseUrl = rtrim($this->wpService->baseUrl(), '/');
+        if ($baseUrl === '') {
+            return [];
+        }
 
         $sources = [];
+
+        if (config('seo-cluster.silo.link_home', true)) {
+            $siteName = '';
+            if ($cluster->api_key_website_id) {
+                $w = ApiKeyWebsite::find($cluster->api_key_website_id);
+                $siteName = trim((string) ($w->site_name ?? ''));
+            }
+            if ($siteName === '') {
+                $host = parse_url($this->wpService->baseUrl(), PHP_URL_HOST);
+                $siteName = $host ?: 'Beranda';
+            }
+            $sources[] = ['title' => $siteName, 'url' => $baseUrl . '/', 'keyword' => '', 'type' => 'home'];
+        }
+
+        if (config('seo-cluster.silo.link_category', true) && $canPredict) {
+            $catSlug = \App\Support\SeoText::slugify($cluster->parent_keyword);
+            if ($catSlug !== '') {
+                $sources[] = [
+                    'title' => $cluster->parent_keyword,
+                    'url' => $baseUrl . '/category/' . $catSlug . '/',
+                    'keyword' => '',
+                    'type' => 'category',
+                ];
+            }
+        }
+
+        return $sources;
+    }
+
+    protected function getSiloLinkSources(KeywordCluster $cluster, ?int $excludeKeywordId = null): array
+    {
+        $baseUrl = rtrim($this->wpService->baseUrl(), '/');
+        $canPredict = $this->siloCanPredict($cluster);
+
+        $sources = $this->siloContextSources($cluster, $canPredict);
 
         if (!empty($cluster->pillar_post_url)) {
             $sources[] = [
@@ -662,10 +710,13 @@ class AutoClusterAgent
         $this->clusterService->logAutomation($cluster->id, 'pillar', 'started', "Generate artikel pillar '{$cluster->parent_keyword}'");
         $start = microtime(true);
 
-        $linkSources = $children
-            ->map(fn ($c) => ['title' => $c->keyword, 'url' => $c->post_url, 'keyword' => $c->keyword])
-            ->values()
-            ->all();
+        $linkSources = array_merge(
+            $this->siloContextSources($cluster, $this->siloCanPredict($cluster)),
+            $children
+                ->map(fn ($c) => ['title' => $c->keyword, 'url' => $c->post_url, 'keyword' => $c->keyword])
+                ->values()
+                ->all()
+        );
 
         $targetWords = max(800, (int) config('seo-cluster.silo.pillar_target_words', 2000));
 

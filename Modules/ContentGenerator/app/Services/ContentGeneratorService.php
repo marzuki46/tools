@@ -464,18 +464,31 @@ PROMPT;
             : "Kamu adalah AI. Tambah dan kembangkan konten berikut sehingga mencapai {$targetWords} kata. Kamu bisa mengembangkan setiap bagian dengan detail, data, contoh, dan informasi baru tanpa mengubah makna yang sudah ada.";
 
         $linkText = '';
+        $hasHomeLink = false;
+        $hasCategoryLink = false;
         foreach ($linkSources as $ls) {
             $lsTitle = $ls['title'] ?? '';
             $lsSlug = $ls['slug'] ?? '';
             $lsUrl = $ls['url'] ?? ($lsSlug ? "/{$lsSlug}/" : '');
             $lsKeyword = $ls['keyword'] ?? '';
+            $lsType = $ls['type'] ?? 'post';
+            if ($lsType === 'home') $hasHomeLink = true;
+            if ($lsType === 'category') $hasCategoryLink = true;
             if ($lsTitle && $lsUrl) {
-                $linkText .= "- {$lsTitle} → {$lsUrl}" . ($lsKeyword ? " (relevan utk: {$lsKeyword})" : '') . "\n";
+                $typeTag = $lsType === 'home' ? ' [Beranda]' : ($lsType === 'category' ? ' [Kategori]' : '');
+                $linkText .= "- {$lsTitle} → {$lsUrl}{$typeTag}" . ($lsKeyword ? " (relevan utk: {$lsKeyword})" : '') . "\n";
             }
         }
         if ($linkText !== '') {
             $linkText = rtrim($linkText, "\n");
-            $linkRule = "SUMBER TAUTAN INTERNAL (HANYA BOLEH memakai URL dari daftar ini — pilih 3-5 yang paling relevan, tautkan dengan anchor text natural di tengah kalimat):\n{$linkText}\n\nATURAN TAUTAN INTERNAL (WAJIB):\n- DILARANG KERAS membuat, menebak, atau mengarang URL internal lain yang tidak ada di daftar di atas.\n- Jika tidak ada yang relevan sama sekali, jangan buat tautan internal.\n- URL harus ditulis PERSIS seperti di daftar.\n- Aturan ini berlaku apa pun bahasa konten.";
+            $anchorRules = '';
+            if ($hasHomeLink) {
+                $anchorRules .= "\n- Sertakan tautan ke Beranda TEPAT 1x. Anchor text = nama brand/situs persis seperti di daftar.";
+            }
+            if ($hasCategoryLink) {
+                $anchorRules .= "\n- Sertakan tautan ke halaman Kategori TEPAT 1x. Anchor text = nama kategori persis seperti di daftar.";
+            }
+            $linkRule = "SUMBER TAUTAN INTERNAL (HANYA BOLEH memakai URL dari daftar ini — pilih 3-5 yang paling relevan, tautkan dengan anchor text natural di tengah kalimat):\n{$linkText}\n\nATURAN TAUTAN INTERNAL (WAJIB):\n- DILARANG KERAS membuat, menebak, atau mengarang URL internal lain yang tidak ada di daftar di atas.\n- Jika tidak ada yang relevan sama sekali, jangan buat tautan internal.\n- URL harus ditulis PERSIS seperti di daftar.{$anchorRules}\n- Aturan ini berlaku apa pun bahasa konten.";
         } else {
             $linkRule = "TAUTAN INTERNAL: Tidak ada daftar URL internal yang tersedia. JANGAN membuat tautan internal apa pun. Jangan mengarang URL. Aturan ini berlaku apa pun bahasa konten.";
         }

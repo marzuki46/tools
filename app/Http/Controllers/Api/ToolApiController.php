@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\SiteContentUrl;
 use App\Models\Tools\Tool;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,6 +33,7 @@ class ToolApiController extends Controller
             'regen-phase3' => 'handleContentRegenPhase3',
             'brief' => 'handleContentBrief',
             'brief-status' => 'handleContentBriefStatus',
+            'sync-inventory' => 'handleSiteInventorySync',
         ],
         'keyword-clusters' => [
             'list' => 'handleClusterList',
@@ -124,6 +126,60 @@ class ToolApiController extends Controller
                 'created_at' => $research->created_at,
                 'updated_at' => $research->updated_at,
             ],
+        ]);
+    }
+
+    /**
+     * Sinkronisasi inventaris URL + target keyword dari plugin WP.
+     * Full-sync: item yang tidak ada di payload akan dihapus.
+     */
+    private function handleSiteInventorySync(Request $request): JsonResponse
+    {
+        $website = $request->attributes->get('api_key_website');
+
+        $validated = $request->validate([
+            'site_name' => 'nullable|string|max:191',
+            'items' => 'present|array|max:1000',
+            'items.*.url' => 'required|string|max:500',
+            'items.*.title' => 'nullable|string|max:255',
+            'items.*.keyword' => 'nullable|string|max:255',
+        ]);
+
+        if ($website && filled($validated['site_name'] ?? null)) {
+            $website->update(['site_name' => trim((string) $validated['site_name'])]);
+        }
+
+        $userId = auth()->id();
+        $keepUrls = [];
+
+        foreach ($validated['items'] as $item) {
+            $url = trim((string) ($item['url'] ?? ''));
+            if ($url === '' || !str_starts_with($url, 'http')) {
+                continue;
+            }
+            $keepUrls[] = $url;
+
+            $keyword = trim((string) ($item['keyword'] ?? ''));
+            SiteContentUrl::updateOrCreate(
+                ['api_key_website_id' => $website?->id, 'url' => $url],
+                [
+                    'user_id' => $userId,
+                    'title' => mb_substr(trim((string) ($item['title'] ?? '')), 0, 255) ?: $url,
+                    'keyword' => $keyword !== '' ? mb_substr($keyword, 0, 255) : null,
+                ]
+            );
+        }
+
+        $stale = SiteContentUrl::where('user_id', $userId)
+            ->forWebsite($website?->id)
+            ->when(!empty($keepUrls), fn ($q) => $q->whereNotIn('url', $keepUrls));
+        $removed = (clone $stale)->count();
+        $stale->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Inventaris situs tersinkron.',
+            'data' => ['synced' => count($keepUrls), 'removed' => $removed],
         ]);
     }
 

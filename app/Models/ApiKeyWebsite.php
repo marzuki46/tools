@@ -16,6 +16,7 @@ class ApiKeyWebsite extends Model
     protected $fillable = [
         'api_key_id',
         'domain',
+        'site_name',
         'locale',
         'is_active',
         'last_used_at',
