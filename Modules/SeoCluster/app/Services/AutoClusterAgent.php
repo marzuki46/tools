@@ -176,7 +176,8 @@ class AutoClusterAgent
         $start = microtime(true);
 
         try {
-            $existing = KeywordResearch::where('target_keyword', $keyword->keyword)
+            $existing = KeywordResearch::where('user_id', $cluster->user_id)
+                ->where('target_keyword', $keyword->keyword)
                 ->where('status', 'completed')
                 ->latest()
                 ->first();

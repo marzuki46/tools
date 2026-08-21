@@ -13,6 +13,7 @@ class KeywordCluster extends Model
 
     protected $fillable = [
         'user_id',
+        'api_key_website_id',
         'name',
         'parent_keyword',
         'description',

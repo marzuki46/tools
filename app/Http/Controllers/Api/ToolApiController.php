@@ -430,9 +430,21 @@ class ToolApiController extends Controller
         }
     }
 
+    /**
+     * Cluster hanya milik situs yang membuatnya: scope per user + per website.
+     * Tanpa ini, semua situs yang memakai satu akun saling melihat cluster-nya.
+     */
+    private function clusterScope(Request $request)
+    {
+        $website = $request->attributes->get('api_key_website');
+
+        return \Modules\SeoCluster\Models\KeywordCluster::where('user_id', auth()->id())
+            ->when($website, fn ($q) => $q->where('api_key_website_id', $website->id));
+    }
+
     private function handleClusterList(Request $request): JsonResponse
     {
-        $clusters = \Modules\SeoCluster\Models\KeywordCluster::where('user_id', auth()->id())
+        $clusters = $this->clusterScope($request)
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($c) => [
@@ -492,6 +504,7 @@ class ToolApiController extends Controller
             'publish_start' => $validated['publish_start'] ?? null,
             'publish_end' => $validated['publish_end'] ?? null,
             'tz_offset' => isset($validated['tz_offset']) ? (float) $validated['tz_offset'] : 7,
+            'api_key_website_id' => $request->attributes->get('api_key_website')?->id,
         ];
         foreach ($clusters as $cluster) {
             $cluster->update($schedule);
@@ -515,7 +528,7 @@ class ToolApiController extends Controller
     {
         $request->validate(['id' => 'required|integer']);
 
-        $cluster = \Modules\SeoCluster\Models\KeywordCluster::where('user_id', auth()->id())
+        $cluster = $this->clusterScope($request)
             ->with('keywords:id,cluster_id,keyword,status,post_url,published_at,error_message,retry_count')
             ->findOrFail($request->id);
 
@@ -544,7 +557,7 @@ class ToolApiController extends Controller
     {
         $request->validate(['id' => 'required|integer']);
 
-        $cluster = \Modules\SeoCluster\Models\KeywordCluster::where('user_id', auth()->id())->findOrFail($request->id);
+        $cluster = $this->clusterScope($request)->findOrFail($request->id);
         app(\Modules\SeoCluster\Services\ClusterService::class)->activateCluster($cluster->id);
 
         return response()->json(['success' => true, 'message' => 'Cluster diaktifkan.']);
@@ -554,7 +567,7 @@ class ToolApiController extends Controller
     {
         $request->validate(['id' => 'required|integer']);
 
-        $cluster = \Modules\SeoCluster\Models\KeywordCluster::where('user_id', auth()->id())->findOrFail($request->id);
+        $cluster = $this->clusterScope($request)->findOrFail($request->id);
         app(\Modules\SeoCluster\Services\ClusterService::class)->pauseCluster($cluster->id);
 
         return response()->json(['success' => true, 'message' => 'Cluster dijeda.']);
