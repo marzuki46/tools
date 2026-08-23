@@ -576,13 +576,18 @@ class AutoClusterAgent
         $this->stats['keywords_published']++;
     }
 
-    protected function siloCanPredict(KeywordCluster $cluster): bool
+    protected function siloUrlPattern(KeywordCluster $cluster): string
     {
         // url_template NULL = dibuat tanpa info permalink (fallback config);
         // string kosong = situs WP permalink Plain -> jangan prediksi URL
-        $pattern = $cluster->url_template !== null
+        return $cluster->url_template !== null
             ? (string) $cluster->url_template
             : (string) config('seo-cluster.silo.url_pattern', '{url}/{slug}/');
+    }
+
+    protected function siloCanPredict(KeywordCluster $cluster): bool
+    {
+        $pattern = $this->siloUrlPattern($cluster);
 
         return $pattern !== '' && str_contains($pattern, '{slug}');
     }
@@ -632,6 +637,7 @@ class AutoClusterAgent
     {
         $baseUrl = rtrim($this->wpService->baseUrl(), '/');
         $canPredict = $this->siloCanPredict($cluster);
+        $pattern = $this->siloUrlPattern($cluster);
 
         $sources = $this->siloContextSources($cluster, $canPredict);
 
