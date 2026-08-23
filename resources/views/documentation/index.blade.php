@@ -539,8 +539,8 @@ ea-php84 artisan seo-cluster:run
 # Otomatis: sudah terdaftar di scheduler (bootstrap/app.php) tiap 30 menit
 ea-php84 artisan schedule:run</pre>
 
-        <h3 class="font-semibold text-sm mb-2">Koneksi WordPress</h3>
-        <p class="text-sm text-gray-600 mb-3">Otomasi publish memerlukan konfigurasi WP di halaman <a href="{{ route('admin.settings') }}" class="text-indigo-600 underline">AI Settings</a> (key <code class="bg-gray-100 px-1 rounded">seo-agent.wp.url</code>, <code class="bg-gray-100 px-1 rounded">username</code>, <code class="bg-gray-100 px-1 rounded">password</code> / App Password). Gambar dicari dari Bing/DuckDuckGo dan di-convert ke WebP.</p>
+        <h3 class="font-semibold text-sm mb-2">Koneksi WordPress (Multi-Situs)</h3>
+        <p class="text-sm text-gray-600 mb-3">Kredensial WordPress ditangani <strong>otomatis per-website</strong>: saat membuat struktur SILO, plugin membuat Application Password di situsnya (<code class="bg-gray-100 px-1 rounded">wp_create_application_password</code>) lalu mengirimkannya ke endpoint <code class="bg-gray-100 px-1 rounded">POST /api/v1/tool/content-generator/wp-credentials</code> dan tersimpan terenkripsi pada data website. <code class="bg-gray-100 px-1 rounded">AutoClusterAgent</code> mem-publish artikel ke situs pemilik masing-masing cluster. Setting global <code class="bg-gray-100 px-1 rounded">seo-agent.wp.*</code> di AI Settings hanya berlaku sebagai fallback untuk cluster tanpa kredensial khusus. Gambar dicari dari Bing/DuckDuckGo dan di-convert ke WebP.</p>
     </div>
 
     {{-- Content Analyzer --}}

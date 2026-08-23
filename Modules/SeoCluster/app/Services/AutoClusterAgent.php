@@ -51,6 +51,19 @@ class AutoClusterAgent
         foreach ($clusters as $cluster) {
             $this->stats['clusters_scanned']++;
 
+            // Kredensial WP milik situs pemilik cluster (multi-tenant);
+            // tanpa kredensial khusus -> fallback ke setting global.
+            if ($cluster->api_key_website_id) {
+                $site = ApiKeyWebsite::find($cluster->api_key_website_id);
+                if ($site && $site->wp_url && $site->wp_app_password) {
+                    $this->wpService->setSiteCredentials($site->wp_url, $site->wp_username, $site->wp_app_password);
+                } else {
+                    $this->wpService->setSiteCredentials(null, null, null);
+                }
+            } else {
+                $this->wpService->setSiteCredentials(null, null, null);
+            }
+
             if (!$force && $cluster->status !== 'active') {
                 continue;
             }

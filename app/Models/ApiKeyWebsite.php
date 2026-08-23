@@ -17,6 +17,9 @@ class ApiKeyWebsite extends Model
         'api_key_id',
         'domain',
         'site_name',
+        'wp_url',
+        'wp_username',
+        'wp_app_password',
         'locale',
         'is_active',
         'last_used_at',
@@ -32,6 +35,7 @@ class ApiKeyWebsite extends Model
         'tokens_in' => 'integer',
         'tokens_out' => 'integer',
         'tokens_total' => 'integer',
+        'wp_app_password' => 'encrypted',
     ];
 
     public function apiKey(): BelongsTo

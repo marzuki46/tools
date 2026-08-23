@@ -24,6 +24,25 @@ class WordPressService
         return [$this->baseUrl, $this->username, $this->password];
     }
 
+    /**
+     * Kredensial per-website (multi-tenant): dipakai AutoClusterAgent agar artikel
+     * silo terbit ke situs pemilik cluster. Kirim null untuk kembali memakai
+     * setting global (seo-agent.wp.*) pada iterasi cluster berikutnya.
+     */
+    public function setSiteCredentials(?string $url, ?string $username, ?string $password): void
+    {
+        if ($url && $username && $password) {
+            $this->baseUrl = rtrim($url, '/');
+            $this->username = $username;
+            $this->password = $password;
+        } else {
+            // Paksa re-resolve dari setting global pada pemanggilan berikutnya
+            $this->baseUrl = null;
+            $this->username = '';
+            $this->password = '';
+        }
+    }
+
     protected function request(string $method, string $path, array $data = []): array
     {
         [$baseUrl, $username, $password] = $this->credentials();

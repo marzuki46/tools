@@ -35,6 +35,7 @@ class ToolApiController extends Controller
             'brief' => 'handleContentBrief',
             'brief-status' => 'handleContentBriefStatus',
             'sync-inventory' => 'handleSiteInventorySync',
+            'wp-credentials' => 'handleWpCredentials',
         ],
         'keyword-clusters' => [
             'list' => 'handleClusterList',
@@ -182,6 +183,34 @@ class ToolApiController extends Controller
             'message' => 'Inventaris situs tersinkron.',
             'data' => ['synced' => count($keepUrls), 'removed' => $removed],
         ]);
+    }
+
+    /**
+     * Kredensial WordPress per-website (multi-tenant): dikirim otomatis oleh plugin
+     * (Application Password dibuat programatis di sisi WP). Dipakai AutoClusterAgent
+     * untuk publish artikel silo ke situs pemilik cluster.
+     */
+    private function handleWpCredentials(Request $request): JsonResponse
+    {
+        $website = $request->attributes->get('api_key_website');
+
+        if (!$website) {
+            return response()->json(['success' => false, 'message' => 'Domain situs belum terdaftar pada API key ini.'], 422);
+        }
+
+        $validated = $request->validate([
+            'wp_url' => 'required|url|max:255',
+            'wp_username' => 'required|string|max:100',
+            'wp_app_password' => 'required|string|max:255',
+        ]);
+
+        $website->update([
+            'wp_url' => rtrim(trim($validated['wp_url']), '/'),
+            'wp_username' => trim($validated['wp_username']),
+            'wp_app_password' => trim($validated['wp_app_password']),
+        ]);
+
+        return response()->json(['success' => true, 'message' => 'Kredensial WordPress situs tersimpan.']);
     }
 
     private function handleContentBrief(Request $request): JsonResponse

@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "052fde575bab08718047a3d4a0add7ed587f63aa",
-    "indexed_at": "2026-07-29T07:20:50Z",
+    "commit": "9a6ba84dd88b89fef886cb656021f7c8c8d0a18b",
+    "indexed_at": "2026-08-07T14:02:07Z",
     "project": "D-Program-Marzuki-Package-Projek-Laravel-tools",
-    "nodes": 1255,
-    "edges": 2643,
-    "original_size": 3473408,
-    "compressed_size": 477341,
-    "compression_level": 9
+    "nodes": 1121,
+    "edges": 2651,
+    "original_size": 5242880,
+    "compressed_size": 632291,
+    "compression_level": 3
 }
