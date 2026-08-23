@@ -17,6 +17,7 @@ use Modules\ContentGenerator\Models\ContentGeneration;
 use Modules\ContentGenerator\Services\ContentGeneratorService;
 use Modules\KeywordResearch\Jobs\ProcessKeywordResearchJob;
 use Modules\KeywordResearch\Models\KeywordResearch;
+use Modules\SeoCluster\Jobs\ProcessClusterStructureJob;
 
 class ToolApiController extends Controller
 {
@@ -536,48 +537,29 @@ class ToolApiController extends Controller
             }
         }
 
-        $service = app(\Modules\SeoCluster\Services\ClusterStructureService::class);
-
-        try {
-            $clusters = $service->generateStructure(
-                auth()->id(),
-                $validated['topic'],
-                (int) ($validated['parent_count'] ?? 4),
-                (int) ($validated['child_count'] ?? 4),
-            );
-        } catch (\Exception $e) {
-            Log::warning('Cluster structure generation failed', ['error' => $e->getMessage()]);
-            return response()->json(['success' => false, 'message' => 'Gagal membuat struktur SILO: ' . $e->getMessage()], 500);
-        }
-
-        // Selalu simpan: template valid, atau string kosong (permalink Plain = tanpa prediksi URL)
+        // Pembuatan struktur memanggil AI (bisa > 30 dtk) — antrikan agar tidak
+        // terkena max_execution_time web host; pola sama dengan riset keyword.
         $urlTemplate = str_contains($validated['url_template'] ?? '', '{slug}')
             ? $validated['url_template']
             : '';
 
-        $schedule = [
+        ProcessClusterStructureJob::dispatch([
+            'user_id' => auth()->id(),
+            'topic' => $validated['topic'],
+            'parent_count' => (int) ($validated['parent_count'] ?? 4),
+            'child_count' => (int) ($validated['child_count'] ?? 4),
             'url_template' => $urlTemplate,
             'publish_start' => $validated['publish_start'] ?? null,
             'publish_end' => $validated['publish_end'] ?? null,
             'tz_offset' => isset($validated['tz_offset']) ? (float) $validated['tz_offset'] : 7,
             'api_key_website_id' => $request->attributes->get('api_key_website')?->id,
-        ];
-        foreach ($clusters as $cluster) {
-            $cluster->update($schedule);
-        }
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => count($clusters) . ' cluster SILO dibuat.',
-            'data' => collect($clusters)->map(fn ($c) => [
-                'id' => $c->id,
-                'name' => $c->name,
-                'parent_keyword' => $c->parent_keyword,
-                'status' => $c->status,
-                'total_keywords' => $c->total_keywords,
-                'url_template' => $c->url_template,
-            ]),
-        ], 201);
+            'message' => 'Struktur SILO diantrikan. Cluster akan muncul otomatis dalam beberapa menit.',
+            'data' => [],
+        ], 202);
     }
 
     private function handleClusterShow(Request $request): JsonResponse
