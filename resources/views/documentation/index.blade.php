@@ -315,9 +315,24 @@ Response:
                 <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">lsi_keywords</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">Array LSI keywords dari hasil riset</td></tr>
                 <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">entities</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">Array entities dari hasil riset</td></tr>
                 <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">business_profile_id</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">ID Profil Bisnis — info bisnis disisipkan ke artikel + dipakai schema</td></tr>
-                <tr><td class="py-2 font-mono text-xs">keyword_research_id</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">ID riset keyword (ambil LSI/entities otomatis)</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">keyword_research_id</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">ID riset keyword (ambil LSI/entities otomatis)</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">link_sources</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">Array URL internal yang BOLEH ditautkan: <code>[{"title":"...","url":"...","keyword":"...","type":"post|home|category"}]</code> — AI memilih 3–5 paling relevan. Anchor Beranda = nama brand/situs, anchor Kategori = nama kategori (masing-masing wajib 1×)</td></tr>
+                <tr class="border-b border-gray-100"><td class="py-2 font-mono text-xs">target_words</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">Target jumlah kata artikel</td></tr>
+                <tr><td class="py-2 font-mono text-xs">include_external_links</td><td class="py-2 text-gray-400">Tidak</td><td class="py-2">true / false — izinkan tautan keluar</td></tr>
             </tbody>
         </table>
+
+        <h3 class="font-semibold text-sm mb-2 mt-6">Sinkronisasi Inventaris URL Situs</h3>
+        <p class="text-sm text-gray-600 mb-3">Plugin WordPress mengirim seluruh URL terpublish + focus keyword SEO (Yoast/RankMath/AIOSEO) sebagai basis internal link & validasi URL silo. Bersifat full-sync: URL yang tidak ada di payload akan dihapus dari sistem. Field <code class="bg-gray-100 px-1 rounded">site_name</code> dipakai sebagai anchor Beranda pada semua artikel.</p>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">POST /api/v1/tool/content-generator/sync-inventory
+{
+  "site_name": "Nama Situs Anda",
+  "items": [
+    {"url": "https://situs.com/artikel/", "title": "Judul Artikel", "keyword": "focus keyword"}
+  ]
+}
+
+Respons: {"success": true, "data": {"synced": 42, "removed": 3}}</pre>
     </div>
 
     {{-- Meta Title & Description --}}
@@ -465,7 +480,7 @@ X-API-Key: juki_{key}</pre>
                 <p class="text-xs font-semibold text-green-700 uppercase tracking-wider">Alur Otomasi per Keyword</p>
                 <ol class="text-sm text-green-700 mt-2 space-y-1 list-decimal list-inside">
                     <li>Riset keyword (LSI + entities)</li>
-                    <li>Generate konten 3-phase</li>
+                    <li>Generate konten 3-phase + internal link SILO otomatis</li>
                     <li>Analisa kualitas konten (analisa)</li>
                     <li>Ambil & upload gambar ke WordPress</li>
                     <li>Publish artikel ke WordPress</li>
@@ -483,7 +498,38 @@ X-API-Key: juki_{key}</pre>
             </div>
         </div>
 
-        <h3 class="font-semibold text-sm mb-2">Web UI</h3>
+        <h3 class="font-semibold text-sm mb-2">API Endpoint</h3>
+        <pre class="bg-gray-50 p-3 rounded-lg text-sm font-mono border border-gray-200 mb-3">POST /api/v1/tool/keyword-clusters/list      # daftar cluster situs ini
+POST /api/v1/tool/keyword-clusters/create    # buat struktur SILO dari topik (async)
+POST /api/v1/tool/keyword-clusters/show      # detail cluster + status tiap keyword
+POST /api/v1/tool/keyword-clusters/activate  # aktifkan otomasi
+POST /api/v1/tool/keyword-clusters/pause     # jeda otomasi
+
+Body create:
+{
+  "topic": "wisata di solo",            // wajib — topik utama silo
+  "parent_count": 4,                    // 1–10 (default 4)
+  "child_count": 4,                     // 1–15 per parent (default 4)
+  "url_template": "https://situs.com/{slug}/",  // prediksi URL internal; string kosong bila permalink Plain
+  "publish_start": "2026-08-24",        // opsional — jadwal terbit (Y-m-d)
+  "publish_end": "2026-08-30",          // opsional — maksimal 2 tahun
+  "tz_offset": 7                        // zona waktu situs (WIB = 7)
+}</pre>
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+            <p class="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Respons create = HTTP 202 (Async)</p>
+            <p class="text-sm text-amber-700">Struktur dibuat oleh job antrian (<code class="bg-white px-1 rounded">ProcessClusterStructureJob</code>) karena generasi AI bisa lebih dari 30 detik — aman dari batas <code class="bg-white px-1 rounded">max_execution_time</code> hosting. Cluster muncul otomatis beberapa menit setelah request: <code class="bg-white px-1 rounded">{"success":true,"message":"Struktur SILO diantrikan..."}</code></p>
+        </div>
+
+        <h3 class="font-semibold text-sm mb-2">Hierarki & Internal Linking</h3>
+        <p class="text-sm text-gray-600 mb-3">Satu topik dipecah menjadi beberapa <strong>parent keyword</strong>; tiap parent mendapat child dan ditutup <strong>artikel pillar</strong> yang menautkan semua child. Seluruh artikel dalam satu silo saling tertaut:</p>
+        <ul class="text-sm text-gray-600 mb-3 list-disc list-inside space-y-1">
+            <li><strong>Child →</strong> artikel pillar + sesama child dalam satu parent</li>
+            <li><strong>Semua artikel →</strong> Beranda (anchor = nama brand/situs) dan halaman Kategori (anchor = nama kategori), masing-masing tepat 1×</li>
+            <li>Hanya URL dari daftar sumber resmi yang boleh ditautkan — AI dilarang mengarang URL internal</li>
+        </ul>
+        <p class="text-sm text-gray-600">Flag konfigurasi (.env): <code class="bg-gray-100 px-1 rounded">SEO_CLUSTER_LINK_HOME=true</code>, <code class="bg-gray-100 px-1 rounded">SEO_CLUSTER_LINK_CATEGORY=true</code>. Nama brand diambil dari <code class="bg-gray-100 px-1 rounded">site_name</code> hasil sinkronisasi inventaris (section #3).</p>
+
+        <h3 class="font-semibold text-sm mb-2 mt-4">Web UI</h3>
         <p class="text-sm text-gray-600 mb-3">Buka <a href="{{ route('seocluster.index') }}" class="text-indigo-600 underline">Keyword Clusters</a> (URL <code class="bg-gray-100 px-1 rounded">/keyword-clusters</code>). Dari sini Anda bisa: buat cluster (nama + parent keyword + daftar keyword), aktifkan/pause otomasi, tambah/hapus keyword, dan lihat progress tiap keyword.</p>
 
         <h3 class="font-semibold text-sm mb-2">Cron / Scheduler</h3>
