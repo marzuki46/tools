@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule): void {
         $schedule->call(function () {
+            Cache::put('queue_heartbeat', now()->toIso8601String(), 300);
             if (!\App\Models\Setting::workerEnabled()) {
                 $pending = \DB::table('jobs')->count();
                 if ($pending === 0) {
@@ -36,10 +37,10 @@ return Application::configure(basePath: dirname(__DIR__))
                 Log::info('Queue worker auto-enabled via scheduler (pending jobs found).', ['pending' => $pending]);
             }
 
-            \Artisan::call('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=620 --tries=3');
+            \Artisan::call('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=620 --tries=3 --sleep=3');
 
             Cache::put('queue_heartbeat', now()->toIso8601String(), 300);
-        })->name('queue-worker')->everyMinute()->withoutOverlapping();
+        })->name('queue-worker')->everyMinute()->withoutOverlapping(10);
 
         $schedule->command('seo-cluster:run')
             ->everyThirtyMinutes()
