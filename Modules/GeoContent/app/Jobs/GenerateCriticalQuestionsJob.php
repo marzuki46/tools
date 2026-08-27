@@ -33,6 +33,12 @@ class GenerateCriticalQuestionsJob implements ShouldQueue
             $service->generate($project);
             $project->update(['status' => 'questions_ready']);
         } catch (\Throwable $e) {
+            if (str_contains($e->getMessage(), 'MONTHLY_REQUEST_COUNT')) {
+                Log::warning('GeoContent: quota habis, tunda 1 jam', ['project' => $this->projectId]);
+                $project->update(['status' => 'pending', 'error_message' => 'Quota AI habis — tunggu 1 jam / ganti model.']);
+                $this->release(3600);
+                return;
+            }
             Log::error('GeoContent: GenerateCriticalQuestionsJob gagal', ['project' => $this->projectId, 'error' => $e->getMessage()]);
             $project->update(['status' => 'failed', 'error_message' => mb_substr($e->getMessage(), 0, 500)]);
             throw $e;

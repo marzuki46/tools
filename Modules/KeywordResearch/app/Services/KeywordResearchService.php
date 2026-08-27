@@ -94,14 +94,21 @@ PROMPT;
                     break;
                 }
 
-                $lastError = new Exception('AI HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 300));
+                $body = $response->body();
+                if (str_contains($body, 'MONTHLY_REQUEST_COUNT') || $response->status() === 402) {
+                    $lastError = new Exception('AI quota habis (MONTHLY_REQUEST_COUNT): ' . substr($body, 0, 300));
+                    break;
+                }
+                $lastError = new Exception('AI HTTP ' . $response->status() . ': ' . substr($body, 0, 300));
             } catch (\Throwable $e) {
                 $lastError = $e;
             }
 
-            if ($attempt < $maxAttempts) {
+            if ($attempt < $maxAttempts && !str_contains($lastError->getMessage(), 'MONTHLY_REQUEST_COUNT')) {
                 Log::warning('KeywordResearch: retry research', ['attempt' => $attempt, 'error' => $lastError->getMessage()]);
                 sleep(5 * $attempt);
+            } elseif (str_contains($lastError->getMessage(), 'MONTHLY_REQUEST_COUNT')) {
+                break;
             }
         }
 
@@ -109,6 +116,9 @@ PROMPT;
             Log::error('KeywordResearch AI Failed', [
                 'error' => $lastError?->getMessage(),
             ]);
+            if (str_contains($lastError->getMessage(), 'MONTHLY_REQUEST_COUNT')) {
+                throw new Exception('AI quota habis (MONTHLY_REQUEST_COUNT) — ganti model di Settings/AI atau tunggu reset. ' . substr($lastError->getMessage(), 0, 200));
+            }
             throw new Exception('Gagal memproses riset keyword. Silakan coba lagi.');
         }
 

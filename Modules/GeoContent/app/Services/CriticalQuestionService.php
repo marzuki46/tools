@@ -116,7 +116,11 @@ PROMPT;
         ])->post($endpoint, $payload);
 
         if (!$response->successful()) {
-            throw new \Exception('AI HTTP ' . $response->status() . ': ' . substr($response->body(), 0, 300));
+            $body = $response->body();
+            if (str_contains($body, 'MONTHLY_REQUEST_COUNT') || $response->status() === 402) {
+                throw new \Exception('AI quota habis (MONTHLY_REQUEST_COUNT) — ganti model di Settings/AI atau tunggu reset. ' . substr($body, 0, 200));
+            }
+            throw new \Exception('AI HTTP ' . $response->status() . ': ' . substr($body, 0, 300));
         }
 
         $data = $response->json();
