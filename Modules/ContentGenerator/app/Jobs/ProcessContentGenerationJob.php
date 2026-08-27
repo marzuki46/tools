@@ -222,6 +222,19 @@ class ProcessContentGenerationJob implements ShouldQueue
             }
 
         } catch (\Exception $e) {
+            if (str_contains($e->getMessage(), 'MONTHLY_REQUEST_COUNT')) {
+                Log::warning('Content Generation quota habis — tunda 1 jam', [
+                    'id' => $this->generation->id,
+                    'keyword' => $this->generation->target_keyword,
+                ]);
+                $this->generation->update([
+                    'status' => 'pending',
+                    'raw_response' => ['error' => 'Quota AI habis — tunda 1 jam / ganti model.'],
+                ]);
+                $this->release(3600);
+                return;
+            }
+
             Log::error('Content Generation Failed', [
                 'id' => $this->generation->id,
                 'keyword' => $this->generation->target_keyword,
