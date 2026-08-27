@@ -1,0 +1,11 @@
+{
+    "name": "GeoContent",
+    "alias": "geocontent",
+    "description": "Modul GEO 4 fase: riset keyword -> cek fakta kompetitor (brand scrub) -> pertanyaan kritis -> generate konten AIDA dengan before/after",
+    "keywords": [],
+    "priority": 0,
+    "providers": [
+        "Modules\\GeoContent\\Providers\\GeoContentServiceProvider"
+    ],
+    "files": []
+}

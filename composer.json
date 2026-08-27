@@ -44,7 +44,10 @@
             "Modules\\SeoCluster\\Database\\Seeders\\": "Modules/SeoCluster/database/seeders/",
             "Modules\\AgentConnector\\": "Modules/AgentConnector/app/",
             "Modules\\AgentConnector\\Database\\Factories\\": "Modules/AgentConnector/database/factories/",
-            "Modules\\AgentConnector\\Database\\Seeders\\": "Modules/AgentConnector/database/seeders/"
+            "Modules\\AgentConnector\\Database\\Seeders\\": "Modules/AgentConnector/database/seeders/",
+            "Modules\\GeoContent\\": "Modules/GeoContent/app/",
+            "Modules\\GeoContent\\Database\\Factories\\": "Modules/GeoContent/database/factories/",
+            "Modules\\GeoContent\\Database\\Seeders\\": "Modules/GeoContent/database/seeders/"
         }
     },
     "autoload-dev": {

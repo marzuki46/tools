@@ -3,5 +3,6 @@
     "KeywordResearch": true,
     "ContentGenerator": true,
     "SeoCluster": true,
-    "AgentConnector": true
+    "AgentConnector": true,
+    "GeoContent": true
 }

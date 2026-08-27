@@ -1,0 +1,28 @@
+{
+    "name": "nwidart/geocontent",
+    "description": "",
+    "authors": [
+        {
+            "name": "Nicolas Widart",
+            "email": "n.widart@gmail.com"
+        }
+    ],
+    "extra": {
+        "laravel": {
+            "providers": [],
+            "aliases": {}
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "Modules\\GeoContent\\": "app/",
+            "Modules\\GeoContent\\Database\\Factories\\": "database/factories/",
+            "Modules\\GeoContent\\Database\\Seeders\\": "database/seeders/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Modules\\GeoContent\\Tests\\": "tests/"
+        }
+    }
+}
