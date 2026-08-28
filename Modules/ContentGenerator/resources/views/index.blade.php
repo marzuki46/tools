@@ -108,6 +108,7 @@
             <thead class="bg-gray-50">
                 <tr>
                     <th class="text-left p-3 text-xs font-semibold text-gray-500 uppercase">Keyword</th>
+                    <th class="text-left p-3 text-xs font-semibold text-gray-500 uppercase">Website</th>
                     <th class="text-left p-3 text-xs font-semibold text-gray-500 uppercase">Fase</th>
                     <th class="text-left p-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
                     <th class="text-left p-3 text-xs font-semibold text-gray-500 uppercase">Tone</th>
@@ -119,6 +120,17 @@
                 @forelse ($generations as $g)
                 <tr class="border-t border-gray-100 hover:bg-gray-50">
                     <td class="p-3 font-medium">{{ $g->target_keyword }}</td>
+                    <td class="p-3 text-sm text-gray-600">
+                        @if ($g->apiKeyWebsite && $g->apiKeyWebsite->domain)
+                            <a href="{{ \Illuminate\Support\Str::startsWith($g->apiKeyWebsite->domain, 'http') ? $g->apiKeyWebsite->domain : 'https://'.$g->apiKeyWebsite->domain }}"
+                               target="_blank"
+                               class="text-indigo-600 hover:text-indigo-800 hover:underline">
+                                {{ $g->apiKeyWebsite->site_name ?: $g->apiKeyWebsite->domain }}
+                            </a>
+                        @else
+                            <span class="text-gray-400">—</span>
+                        @endif
+                    </td>
                     <td class="p-3 text-sm text-gray-600">Fase {{ $g->current_phase }}</td>
                     <td class="p-3">
                         <span class="px-2 py-0.5 text-xs font-medium rounded-full
@@ -137,7 +149,7 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="6" class="p-6 text-center text-gray-500">Belum ada konten.</td>
+                    <td colspan="7" class="p-6 text-center text-gray-500">Belum ada konten.</td>
                 </tr>
                 @endforelse
             </tbody>

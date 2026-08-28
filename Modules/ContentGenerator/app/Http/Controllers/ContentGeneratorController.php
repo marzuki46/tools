@@ -14,7 +14,8 @@ class ContentGeneratorController extends Controller
 {
     public function index()
     {
-        $generations = ContentGeneration::where('user_id', auth()->id())
+        $generations = ContentGeneration::with('apiKeyWebsite')
+            ->where('user_id', auth()->id())
             ->orderBy('created_at', 'desc')
             ->paginate(15);
 
