@@ -121,12 +121,23 @@
                 <tr class="border-t border-gray-100 hover:bg-gray-50">
                     <td class="p-3 font-medium">{{ $g->target_keyword }}</td>
                     <td class="p-3 text-sm text-gray-600">
-                        @if ($g->apiKeyWebsite && $g->apiKeyWebsite->domain)
-                            <a href="{{ \Illuminate\Support\Str::startsWith($g->apiKeyWebsite->domain, 'http') ? $g->apiKeyWebsite->domain : 'https://'.$g->apiKeyWebsite->domain }}"
+                        @php
+                            $pageUrl = $g->wp_url;
+                            $siteDomain = $g->apiKeyWebsite?->domain;
+                            $siteName = $g->apiKeyWebsite?->site_name;
+                        @endphp
+                        @if ($pageUrl)
+                            <a href="{{ $pageUrl }}" target="_blank" class="text-indigo-600 hover:text-indigo-800 hover:underline">🔗 Lihat Halaman</a>
+                            @if ($siteName)
+                                <div class="text-xs text-gray-400 mt-0.5">{{ $siteName }}</div>
+                            @endif
+                        @elseif ($siteDomain)
+                            <a href="{{ \Illuminate\Support\Str::startsWith($siteDomain, 'http') ? $siteDomain : 'https://'.$siteDomain }}"
                                target="_blank"
                                class="text-indigo-600 hover:text-indigo-800 hover:underline">
-                                {{ $g->apiKeyWebsite->site_name ?: $g->apiKeyWebsite->domain }}
+                                {{ $siteName ?: $siteDomain }}
                             </a>
+                            <div class="text-xs text-gray-400 mt-0.5">URL halaman muncul setelah diterapkan</div>
                         @else
                             <span class="text-gray-400">—</span>
                         @endif

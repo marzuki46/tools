@@ -29,6 +29,7 @@ class ContentGeneration extends Model
         'phase_3_content',
         'meta_title',
         'meta_description',
+        'wp_url',
         'status',
         'current_phase',
         'raw_response',

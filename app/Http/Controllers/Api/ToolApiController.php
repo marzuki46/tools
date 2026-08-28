@@ -36,6 +36,7 @@ class ToolApiController extends Controller
             'brief-status' => 'handleContentBriefStatus',
             'sync-inventory' => 'handleSiteInventorySync',
             'wp-credentials' => 'handleWpCredentials',
+            'sync-wp-url' => 'handleSyncWpUrl',
         ],
         'keyword-clusters' => [
             'list' => 'handleClusterList',
@@ -211,6 +212,21 @@ class ToolApiController extends Controller
         ]);
 
         return response()->json(['success' => true, 'message' => 'Kredensial WordPress situs tersimpan.']);
+    }
+
+    private function handleSyncWpUrl(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'id' => 'required|integer',
+            'wp_url' => 'required|string|max:500',
+        ]);
+
+        $generation = ContentGeneration::where('user_id', auth()->id())
+            ->findOrFail($validated['id']);
+
+        $generation->update(['wp_url' => $validated['wp_url']]);
+
+        return response()->json(['success' => true, 'message' => 'URL WordPress konten tersimpan.']);
     }
 
     private function handleContentBrief(Request $request): JsonResponse
