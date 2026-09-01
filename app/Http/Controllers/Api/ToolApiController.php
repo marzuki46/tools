@@ -37,7 +37,6 @@ class ToolApiController extends Controller
             'sync-inventory' => 'handleSiteInventorySync',
             'wp-credentials' => 'handleWpCredentials',
             'sync-wp-url' => 'handleSyncWpUrl',
-            'resume' => 'handleContentResume',
         ],
         'keyword-clusters' => [
             'list' => 'handleClusterList',
@@ -228,44 +227,6 @@ class ToolApiController extends Controller
         $generation->update(['wp_url' => $validated['wp_url']]);
 
         return response()->json(['success' => true, 'message' => 'URL WordPress konten tersimpan.']);
-    }
-
-    private function handleContentResume(Request $request): JsonResponse
-    {
-        $request->validate(['id' => 'required|integer']);
-
-        $generation = ContentGeneration::where('user_id', auth()->id())
-            ->findOrFail($request->id);
-
-        if (!empty($generation->phase_3_content)) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Konten sudah selesai diproses.',
-                'data' => [
-                    'id' => $generation->id,
-                    'status' => 'completed',
-                    'current_phase' => 3,
-                ],
-            ]);
-        }
-
-        $generation->update([
-            'status' => 'pending',
-            'current_phase' => max(0, $generation->current_phase ?? 0),
-            'raw_response' => null,
-        ]);
-
-        ProcessContentGenerationJob::dispatch($generation);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Konten dilanjutkan dari fase terakhir yang tersimpan.',
-            'data' => [
-                'id' => $generation->id,
-                'status' => 'pending',
-                'current_phase' => $generation->current_phase,
-            ],
-        ]);
     }
 
     private function handleContentBrief(Request $request): JsonResponse
