@@ -701,6 +701,23 @@ PROMPT;
         ];
     }
 
+    private function aiMessageContent(?array $data): ?string
+    {
+        if (!is_array($data)) {
+            return null;
+        }
+        $content = data_get($data, 'choices.0.message.content');
+        if (is_string($content) && trim($content) !== '') {
+            return $content;
+        }
+        $soft = data_get($data, 'choices.0.message.reasoning_content');
+        if (is_string($soft) && trim($soft) !== '') {
+            return $soft;
+        }
+        $alt = data_get($data, 'choices.0.message.content.0.text');
+        return is_string($alt) ? $alt : null;
+    }
+
     private function callAI(string $prompt): string
     {
         $ai = Setting::aiConfig();
@@ -783,12 +800,12 @@ PROMPT;
 
         $data = $response->json();
 
-        $content = $data['choices'][0]['message']['content'] ?? null;
+        $content = $this->aiMessageContent($data);
 
         if (is_null($content) || trim((string) $content) === '') {
             Log::warning('ContentGenerator: AI balas tanpa content — coba ulang sekali', [
                 'model' => $model,
-                'finish_reason' => $data['choices'][0]['finish_reason'] ?? null,
+                'finish_reason' => data_get($data, 'choices.0.finish_reason'),
                 'raw' => substr($response->body(), 0, 300),
             ]);
             $retryResponse = Http::timeout(300)
@@ -799,7 +816,7 @@ PROMPT;
                 ])->post($endpoint, $payload);
             if ($retryResponse->successful()) {
                 $data = $retryResponse->json();
-                $content = $data['choices'][0]['message']['content'] ?? null;
+                $content = $this->aiMessageContent($data);
             }
             if (is_null($content) || trim((string) $content) === '') {
                 Log::error('ContentGenerator AI Failed (empty content after retry)', [
