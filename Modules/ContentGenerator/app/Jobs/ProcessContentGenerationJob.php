@@ -21,6 +21,8 @@ class ProcessContentGenerationJob implements ShouldQueue
 
     public int $tries = 3;
 
+    public int $timeout = 1800;
+
     public function __construct(
         public ContentGeneration $generation,
         public int $targetPhase = 3
@@ -35,7 +37,7 @@ class ProcessContentGenerationJob implements ShouldQueue
 
     public function retryUntil(): \DateTime
     {
-        return now()->addMinutes(15);
+        return now()->addMinutes(55);
     }
 
     public function handle(ContentGeneratorService $service): void

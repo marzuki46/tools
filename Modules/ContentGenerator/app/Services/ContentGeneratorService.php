@@ -184,14 +184,47 @@ PROMPT;
         $effectiveLocale = $this->resolveLocale($locale, $website, $plainText);
         $briefText = $brief ? $this->buildBriefPromptContext($brief) : '';
         $businessText = $businessProfile?->toPromptContext() ?? '';
+        $target = $targetWords ?: max((int) (str_word_count($plainText) * 2.0), 1200);
+
+        // Layer berlapis: coba prompt kaya dulu; jika kosong, turunkan konteks bertahap
+        // agar model tetap bisa menghasilkan konten (tanpa mengganti model — 9router combo tetap).
+        $content = '';
+
+        $layers = [
+            1 => fn () => $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $target, $briefText, $linkSources, $businessText, $includeExternalLinks, $contentType),
+            2 => fn () => $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, [], [], $target, '', [], '', $includeExternalLinks, $contentType),
+            3 => fn () => $this->buildPhase3Prompt($plainText, [], $keyword, $effectiveLocale, $tone, [], [], max(600, (int) $target), '', [], '', $includeExternalLinks, $contentType),
+            4 => fn () => $this->buildPhase3Prompt('', [], $keyword, $effectiveLocale, $tone, [], [], 400, '', [], $businessText, $includeExternalLinks, $contentType),
+        ];
+
+        foreach ($layers as $num => $buildPrompt) {
+            $raw = $this->callAI($buildPrompt());
+            $candidate = $this->processContent($raw);
+            if (trim((string) $candidate) === '') {
+                Log::warning('ContentGenerator: fase 3 layer ' . $num . ' kosong, lanjut ke layer berikutnya', [
+                    'keyword' => $keyword,
+                    'locale' => $effectiveLocale,
+                ]);
+                continue;
+            }
+            $content = $candidate;
+            if ($num > 1) {
+                Log::warning('ContentGenerator: fase 3 berhasil lewat layer ' . $num . ' (fallback)', [
+                    'keyword' => $keyword,
+                    'locale' => $effectiveLocale,
+                ]);
+            }
+            break;
+        }
+
+        if (trim((string) $content) === '') {
+            return $content;
+        }
 
         $slop = app(NoAiSlopService::class);
         $rewriteEnabled = (bool) $this->cfg('ai_slop.rewrite_enabled', true);
         $maxRetries = max(1, (int) $this->cfg('ai_slop.max_retries', 2));
         $autoFix = (bool) $this->cfg('ai_slop.auto_fix_banned_words', false);
-
-        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $targetWords, $briefText, $linkSources, $businessText, $includeExternalLinks, $contentType);
-        $content = $this->processContent($this->callAI($prompt));
 
         $attempt = 1;
         while ($attempt <= $maxRetries && $rewriteEnabled) {

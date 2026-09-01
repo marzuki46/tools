@@ -37,7 +37,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 Log::info('Queue worker auto-enabled via scheduler (pending jobs found).', ['pending' => $pending]);
             }
 
-            \Artisan::call('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=620 --tries=3 --sleep=3');
+            \Artisan::call('queue:work --queue=default,keyword-research,content-generator --stop-when-empty --timeout=1900 --tries=3 --sleep=3');
 
             Cache::put('queue_heartbeat', now()->toIso8601String(), 300);
         })->name('queue-worker')->everyMinute()->withoutOverlapping(10);
