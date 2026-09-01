@@ -186,35 +186,33 @@ PROMPT;
         $businessText = $businessProfile?->toPromptContext() ?? '';
         $target = $targetWords ?: max((int) (str_word_count($plainText) * 2.0), 1200);
 
-        // Layer berlapis: coba prompt kaya dulu; jika kosong, turunkan konteks bertahap
-        // agar model tetap bisa menghasilkan konten (tanpa mengganti model — 9router combo tetap).
+        // Layer berlapis = metode "retry request": semua konteks PENTING (fase 1 +
+        // pertanyaan + LSI + entity + link + brief + business) TETAP dipakai penuh di
+        // tiap layer; bedanya hanya jumlah percobaan meminta ke AI (maksimal 4 layer).
+        // Jika satu layer menghasilkan konten, langsung dipakai. Tidak ada konteks yang
+        // dibuang dan tidak mengganti model (9router combo dari Settings/AI tetap).
         $content = '';
 
-        $layers = [
-            1 => fn () => $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $target, $briefText, $linkSources, $businessText, $includeExternalLinks, $contentType),
-            2 => fn () => $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, [], [], $target, '', [], '', $includeExternalLinks, $contentType),
-            3 => fn () => $this->buildPhase3Prompt($plainText, [], $keyword, $effectiveLocale, $tone, [], [], max(600, (int) $target), '', [], '', $includeExternalLinks, $contentType),
-            4 => fn () => $this->buildPhase3Prompt('', [], $keyword, $effectiveLocale, $tone, [], [], 400, '', [], $businessText, $includeExternalLinks, $contentType),
-        ];
+        $prompt = $this->buildPhase3Prompt($plainText, $questions, $keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $target, $briefText, $linkSources, $businessText, $includeExternalLinks, $contentType);
 
-        foreach ($layers as $num => $buildPrompt) {
-            $raw = $this->callAI($buildPrompt());
+        for ($layer = 1; $layer <= 4; $layer++) {
+            $raw = $this->callAI($prompt);
             $candidate = $this->processContent($raw);
-            if (trim((string) $candidate) === '') {
-                Log::warning('ContentGenerator: fase 3 layer ' . $num . ' kosong, lanjut ke layer berikutnya', [
-                    'keyword' => $keyword,
-                    'locale' => $effectiveLocale,
-                ]);
-                continue;
+            if (trim((string) $candidate) !== '') {
+                $content = $candidate;
+                if ($layer > 1) {
+                    Log::warning('ContentGenerator: fase 3 berhasil lewat layer ' . $layer . ' (retry request)', [
+                        'keyword' => $keyword,
+                        'locale' => $effectiveLocale,
+                    ]);
+                }
+                break;
             }
-            $content = $candidate;
-            if ($num > 1) {
-                Log::warning('ContentGenerator: fase 3 berhasil lewat layer ' . $num . ' (fallback)', [
-                    'keyword' => $keyword,
-                    'locale' => $effectiveLocale,
-                ]);
-            }
-            break;
+
+            Log::warning('ContentGenerator: fase 3 layer ' . $layer . ' kosong, ulangi request (layer berikutnya)', [
+                'keyword' => $keyword,
+                'locale' => $effectiveLocale,
+            ]);
         }
 
         if (trim((string) $content) === '') {
