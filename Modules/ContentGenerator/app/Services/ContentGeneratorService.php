@@ -211,7 +211,15 @@ PROMPT;
             ]);
 
             $fixPrompt = $this->buildPhase3FixPrompt($content, $hits, $keyword, $effectiveLocale, $tone);
-            $content = $this->processContent($this->callAI($fixPrompt));
+            $rewritten = $this->callAI($fixPrompt);
+            if (trim((string) $rewritten) === '') {
+                Log::warning('Phase3 rewrite returned empty content — mempertahankan konten asli', [
+                    'keyword' => $keyword,
+                    'attempt' => $attempt,
+                ]);
+                break;
+            }
+            $content = $this->processContent($rewritten);
             $attempt++;
         }
 
@@ -573,6 +581,17 @@ Contoh format paragraf yang BENAR:
 Contoh format paragraf yang SALAH (JANGAN):
 "Hiburan Tiongkok dominasi layar Asia. Penonton global pilih drama cina. Kualitas produksi naik drastis. Cerita makin kompleks."
 
+HUMANISASI (SUPAYA TIDAK TERLIHAT BUATAN AI — WAJIB):
+- Tulis seolah seorang penulis manusia yang benar-benar menguasai topik, bukan bot yang merangkai template.
+- Variasikan irama: selingi 1-2 kalimat tegas-pendek di antara kalimat panjang yang mengalir. Jangan semuanya punya panjang seragam.
+- Gunakan kalimat AKTIF dan langsung ke pembaca; batasi kalimat pasif.
+- Jangan terlalu rapi: hindari pola "setiap paragraf diawali kata transisi" yang berulang; biarkan ada paragraf yang cukup mandiri.
+- Minimalkan daftar/poin berlebihan; utamakan paragraf naratif yang menjelaskan secara mengalir.
+- Sertakan sudut pandang/penilaian penulis yang natural dan relevan (mis. "banyak orang merasakan hal yang sama", "tergantung kebutuhanmu"), TANPA menambah fakta, angka, nama, atau klaim yang tidak ada di sumber.
+- Jangan mengulang kalimat atau ide yang sama dengan kata lain berulang kali.
+- Hindari kata seru berlebihan ("!", "Sangat", "Amat") dan frasa promosi kosong.
+- Pertahankan seluruh fakta, keyword target, struktur heading, tautan, dan target jumlah kata.
+
 {$businessText}
 
 {$briefText}
@@ -764,11 +783,37 @@ PROMPT;
 
         $data = $response->json();
 
+        $content = $data['choices'][0]['message']['content'] ?? null;
+
+        if (is_null($content) || trim((string) $content) === '') {
+            Log::warning('ContentGenerator: AI balas tanpa content — coba ulang sekali', [
+                'model' => $model,
+                'finish_reason' => $data['choices'][0]['finish_reason'] ?? null,
+                'raw' => substr($response->body(), 0, 300),
+            ]);
+            $retryResponse = Http::timeout(300)
+                ->connectTimeout(30)
+                ->withHeaders([
+                    'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
+                    'Content-Type' => 'application/json',
+                ])->post($endpoint, $payload);
+            if ($retryResponse->successful()) {
+                $data = $retryResponse->json();
+                $content = $data['choices'][0]['message']['content'] ?? null;
+            }
+            if (is_null($content) || trim((string) $content) === '') {
+                Log::error('ContentGenerator AI Failed (empty content after retry)', [
+                    'model' => $model,
+                ]);
+                return '';
+            }
+        }
+
         $usage = $data['usage'] ?? [];
         $this->tokenUsage['tokens_in'] += $usage['prompt_tokens'] ?? 0;
         $this->tokenUsage['tokens_out'] += $usage['completion_tokens'] ?? 0;
 
-        return $data['choices'][0]['message']['content'] ?? '';
+        return $content;
     }
 
     private function parseQuestions(string $raw): array
