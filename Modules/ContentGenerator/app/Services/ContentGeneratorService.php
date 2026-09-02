@@ -56,7 +56,41 @@ class ContentGeneratorService
         $briefText = $brief ? $this->buildBriefPromptContext($brief) : '';
 
         $prompt = $this->buildPhase1Prompt($keyword, $effectiveLocale, $tone, $lsiKeywords, $entities, $userId, $memoryText, $businessText, $targetWords, $briefText, $includeExternalLinks);
-        return $this->processContent($this->callAI($prompt));
+        return $this->generateWithLayers($prompt, $keyword);
+    }
+
+    // Layer berlapis = metode "retry request": konteks prompt TETAP penuh di tiap layer,
+    // bedanya hanya jumlah usaha meminta ke AI (maksimal 4). Berlaku untuk tahapan yang
+    // rentan AI mengembalikan respons kosong (HTTP 200 tapi body kosong) — error yang
+    // TIDAK memicu exception, sehingga tidak tertangkap retry job. Jika setelah 4 layer
+    // masih kosong → anggap kehabisan/sibuk → lempar RETRYABLE agar job me-release &
+    // mencoba lagi nanti (bukan gagal permanen).
+    private function generateWithLayers(string $prompt, string $keyword): string
+    {
+        $content = '';
+        for ($layer = 1; $layer <= 4; $layer++) {
+            $raw = $this->callAI($prompt);
+            $candidate = $this->processContent($raw);
+            if (trim((string) $candidate) !== '') {
+                $content = $candidate;
+                if ($layer > 1) {
+                    Log::warning('ContentGenerator: tahap berhasil lewat layer ' . $layer . ' (retry request)', [
+                        'keyword' => $keyword,
+                    ]);
+                }
+                break;
+            }
+
+            Log::warning('ContentGenerator: tahap layer ' . $layer . ' kosong, ulangi request (layer berikutnya)', [
+                'keyword' => $keyword,
+            ]);
+        }
+
+        if (trim((string) $content) === '') {
+            throw new Exception('RETRYABLE: AI mengembalikan konten kosong berulang kali — akan dicoba lagi nanti. (keyword: ' . $keyword . ')');
+        }
+
+        return $content;
     }
 
     public function buildBriefPromptContext(array $brief): string
