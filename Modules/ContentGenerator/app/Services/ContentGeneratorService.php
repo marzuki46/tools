@@ -751,12 +751,35 @@ PROMPT;
 
     private function isQuotaExhausted(int $status, string $body): bool
     {
-        if ($status === 402 || $status === 429) {
+        if ($status === 402) {
             return true;
         }
         $low = mb_strtolower($body);
-        foreach (['monthly_request_count', 'insufficient_quota', 'quota exceeded', 'quota_exceeded', 'quota limit', 'rate limit', 'too many requests', 'exceeded your current quota', 'usage limit'] as $marker) {
+        foreach (['monthly_request_count', 'insufficient_quota', 'quota exceeded', 'quota_exceeded', 'quota limit', 'exceeded your current quota', 'usage limit', 'quota exhausted'] as $marker) {
             if (str_contains($low, $marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Error sementara (bisa pulih & layak di-retry kemudian): 429 rate-limit,
+    // 5xx server, atau kegagalan koneksi. Bukan berarti permanen gagal.
+    private function isTransientAiError(int $status, ?\Throwable $e = null, string $body = ''): bool
+    {
+        if ($status === 429 || $status >= 500) {
+            return true;
+        }
+        if ($e) {
+            foreach (['connection', 'timed out', 'timeout', 'curl error', 'could not resolve host', 'name or service not known'] as $m) {
+                if (str_contains(mb_strtolower($e->getMessage()), $m)) {
+                    return true;
+                }
+            }
+        }
+        $low = mb_strtolower($body);
+        foreach (['rate limit', 'too many requests', 'overloaded', 'server error', 'temporarily', 'try again later', 'unavailable', '502', '503', '504'] as $m) {
+            if (str_contains($low, $m)) {
                 return true;
             }
         }
@@ -800,46 +823,79 @@ PROMPT;
         $maxAttempts = 3;
         $response = null;
         $lastError = null;
+        $lastStatus = 0;
+        $lockAcquired = false;
 
-        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+        // Serialisasi panggilan AI global: satu panggilan AI pada satu waktu di
+        // seluruh sistem (semua tool) agar tidak "menyerbu" provider bersamaan,
+        // yang memicu rate-limit & kegagalan massal saat batch besar.
+        $lock = \Illuminate\Support\Facades\Cache::lock('ai_request_mutex', 400);
+
+        try {
+            $lock->block(300);
+            $lockAcquired = true;
+        } catch (\Throwable $lockErr) {
+            $lastError = new Exception('RETRYABLE: AI lock timeout — sistem AI sedang sibuk. ' . $lockErr->getMessage());
+        }
+
+        if ($lockAcquired) {
             try {
-                $response = Http::timeout(300)
-                    ->connectTimeout(30)
-                    ->withHeaders([
-                        'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
-                        'Content-Type' => 'application/json',
-                    ])->post($endpoint, $payload);
+                for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                    try {
+                        $response = Http::timeout(300)
+                            ->connectTimeout(30)
+                            ->withHeaders([
+                                'Authorization' => $apiKey ? "Bearer {$apiKey}" : '',
+                                'Content-Type' => 'application/json',
+                            ])->post($endpoint, $payload);
 
-                if ($response->successful()) {
-                    break;
+                        if ($response->successful()) {
+                            break;
+                        }
+
+                        $lastStatus = $response->status();
+                        $body = $response->body();
+                        // Quota habis (402 / insufficient_quota) — jeda, lanjut saat token pulih.
+                        if ($this->isQuotaExhausted($response->status(), $body)) {
+                            $lastError = new Exception('QUOTA_PAUSE: quota AI tercapai (HTTP ' . $response->status() . '): ' . substr($body, 0, 300));
+                            break;
+                        }
+                        // Error sementara (429/5xx) — layak di-retry; ditandai RETRYABLE
+                        // agar job me-release & coba lagi nanti, bukan gagal permanen.
+                        if ($this->isTransientAiError($response->status(), null, $body)) {
+                            $lastError = new Exception('RETRYABLE: error sementara AI (HTTP ' . $response->status() . '): ' . substr($body, 0, 300));
+                        } else {
+                            $lastError = new Exception('AI HTTP ' . $response->status() . ': ' . substr($body, 0, 300));
+                        }
+                    } catch (\Throwable $e) {
+                        $lastStatus = 0;
+                        if ($this->isTransientAiError(0, $e)) {
+                            $lastError = new Exception('RETRYABLE: koneksi AI gagal — ' . $e->getMessage());
+                        } else {
+                            $lastError = $e;
+                        }
+                    }
+
+                    $msg = $lastError->getMessage();
+                    if (str_contains($msg, 'QUOTA_PAUSE') || str_contains($msg, 'RETRYABLE')) {
+                        sleep(3 * $attempt); // jeda sebentar sebelum retry internal/selesai
+                    } elseif ($attempt < $maxAttempts) {
+                        Log::warning('ContentGenerator: retry callAI', ['attempt' => $attempt, 'error' => $msg]);
+                        sleep(5 * $attempt);
+                    }
                 }
-
-                $body = $response->body();
-                // Quota habis / rate limit (402 || 429 || marker) — jangan retry cepat,
-                // biarkan job di-pause (QUOTA_PAUSE) dan dilanjutkan saat token pulih.
-                if ($this->isQuotaExhausted($response->status(), $body)) {
-                    $lastError = new Exception('QUOTA_PAUSE: quota/limit AI tercapai (HTTP ' . $response->status() . '): ' . substr($body, 0, 300));
-                    break;
-                }
-                $lastError = new Exception('AI HTTP ' . $response->status() . ': ' . substr($body, 0, 300));
-            } catch (\Throwable $e) {
-                $lastError = $e;
-            }
-
-            if ($attempt < $maxAttempts && !str_contains($lastError->getMessage(), 'QUOTA_PAUSE')) {
-                Log::warning('ContentGenerator: retry callAI', ['attempt' => $attempt, 'error' => $lastError->getMessage()]);
-                sleep(5 * $attempt);
-            } elseif (str_contains($lastError->getMessage(), 'QUOTA_PAUSE')) {
-                break;
+            } finally {
+                $lock->release();
             }
         }
 
         if (!$response || !$response->successful()) {
-            Log::error('ContentGenerator AI Failed', [
-                'error' => $lastError?->getMessage(),
-            ]);
+            Log::error('ContentGenerator AI Failed', ['error' => $lastError?->getMessage(), 'status' => $lastStatus, 'keyword' => $model]);
             if (str_contains($lastError->getMessage(), 'QUOTA_PAUSE')) {
-                throw new Exception('QUOTA_PAUSE: quota/limit AI tercapai — jeda dulu, akan dilanjutkan saat token pulih. ' . substr($lastError->getMessage(), 0, 200));
+                throw new Exception('QUOTA_PAUSE: quota AI tercapai — jeda dulu, akan dilanjutkan saat token pulih. ' . substr($lastError->getMessage(), 0, 200));
+            }
+            if (str_contains($lastError->getMessage(), 'RETRYABLE')) {
+                throw new Exception('RETRYABLE: AI sedang sibuk/error sementara — akan dicoba lagi. ' . substr($lastError->getMessage(), 0, 200));
             }
             throw new Exception('Gagal memproses konten. Silakan coba lagi.');
         }

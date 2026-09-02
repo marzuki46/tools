@@ -19,7 +19,9 @@ class ProcessContentGenerationJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 999;
+
+    public int $maxRetryableReleases = 40;
 
     public int $timeout = 1800;
 
@@ -37,7 +39,9 @@ class ProcessContentGenerationJob implements ShouldQueue
 
     public function retryUntil(): \DateTime
     {
-        return now()->addMinutes(55);
+        // Jendela retry panjang agar item bertahan saat AI error sementara
+        // / rate-limit berjam-jam, tanpa langsung gagal permanen.
+        return now()->addHours(6);
     }
 
     public function handle(ContentGeneratorService $service): void
@@ -247,6 +251,37 @@ class ProcessContentGenerationJob implements ShouldQueue
                 return;
             }
 
+            // Error sementara AI (429/5xx/koneksi) — jangan gagal permanen.
+            // Set pending & release 150 detik untuk dicoba lagi; setelah batas
+            // release tercapai baru ditandai failed.
+            if (str_contains($e->getMessage(), 'RETRYABLE')) {
+                $attempt = (int) $this->attempts();
+                Log::warning('Content Generation AI sementara — release & retry', [
+                    'id' => $this->generation->id,
+                    'keyword' => $this->generation->target_keyword,
+                    'phase' => $this->targetPhase,
+                    'attempt' => $attempt,
+                    'error' => $e->getMessage(),
+                ]);
+
+                if ($attempt >= $this->maxRetryableReleases) {
+                    $this->generation->update([
+                        'status' => 'failed',
+                        'raw_response' => ['error' => 'AI sibuk/error sementara terlalu lama: ' . $e->getMessage()],
+                    ]);
+                    $this->syncTokenUsage();
+                    $this->fail($e);
+                    return;
+                }
+
+                $this->generation->update([
+                    'status' => 'pending',
+                    'raw_response' => ['error' => 'AI sementara sibuk — dicoba lagi otomatis.', 'retry_at' => now()->addMinutes(2)->toDateTimeString()],
+                ]);
+                $this->release(150);
+                return;
+            }
+
             Log::error('Content Generation Failed', [
                 'id' => $this->generation->id,
                 'keyword' => $this->generation->target_keyword,
@@ -264,7 +299,7 @@ class ProcessContentGenerationJob implements ShouldQueue
 
             $this->syncTokenUsage();
 
-            throw $e;
+            $this->fail($e);
         }
     }
 
@@ -278,7 +313,7 @@ class ProcessContentGenerationJob implements ShouldQueue
 
         $this->generation->update([
             'status' => 'failed',
-            'raw_response' => ['error' => 'Gagal setelah 3 kali percobaan: ' . $e->getMessage()],
+            'raw_response' => ['error' => 'Gagal diproses: ' . $e->getMessage()],
         ]);
     }
 
