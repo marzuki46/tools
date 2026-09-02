@@ -219,12 +219,17 @@ class ToolApiController extends Controller
         $validated = $request->validate([
             'id' => 'required|integer',
             'wp_url' => 'required|string|max:500',
+            'wp_post_id' => 'nullable|integer',
         ]);
 
         $generation = ContentGeneration::where('user_id', auth()->id())
             ->findOrFail($validated['id']);
 
-        $generation->update(['wp_url' => $validated['wp_url']]);
+        $data = ['wp_url' => $validated['wp_url']];
+        if (!empty($validated['wp_post_id'])) {
+            $data['wp_post_id'] = (int) $validated['wp_post_id'];
+        }
+        $generation->update($data);
 
         return response()->json(['success' => true, 'message' => 'URL WordPress konten tersimpan.']);
     }
@@ -296,6 +301,8 @@ class ToolApiController extends Controller
             'locale' => 'nullable|string|max:10',
             'tone' => 'nullable|string|max:50',
             'content_type' => ['nullable', 'string', 'max:30', Rule::in(['post', 'page', 'product', 'product_cat', 'tag'])],
+            'wp_entity_type' => ['nullable', 'string', 'max:30', Rule::in(['post', 'page', 'product', 'product_cat', 'tag'])],
+            'wp_entity_id' => 'nullable|integer',
             'lsi_keywords' => 'nullable|array|max:50',
             'lsi_keywords.*' => 'nullable',
             'entities' => 'nullable|array|max:30',
@@ -313,8 +320,14 @@ class ToolApiController extends Controller
         $service = app(ContentGeneratorService::class);
         $locale = $service->resolveLocale($validated['locale'] ?? null, $website, $validated['keyword']);
 
-        $generation = ContentGeneration::create([
-            'user_id' => auth()->id(),
+        $contentKey = $this->resolveContentKey(
+            $validated['wp_entity_type'] ?? null,
+            $validated['wp_entity_id'] ?? null,
+            $validated['keyword_research_id'] ?? null,
+            $validated['content_brief_id'] ?? null
+        );
+
+        $data = [
             'api_key_website_id' => $website?->id,
             'target_keyword' => $validated['keyword'],
             'locale' => $locale,
@@ -328,9 +341,14 @@ class ToolApiController extends Controller
             'content_brief_id' => $validated['content_brief_id'] ?? null,
             'target_words' => $validated['target_words'] ?? null,
             'include_external_links' => $validated['include_external_links'] ?? null,
+            'wp_entity_type' => $validated['wp_entity_type'] ?? null,
+            'wp_entity_id' => $validated['wp_entity_id'] ?? null,
+            'content_key' => $contentKey,
             'status' => 'draft',
             'current_phase' => 0,
-        ]);
+        ];
+
+        $generation = $this->resolveOrCreateGeneration($data);
 
         ProcessContentGenerationJob::dispatch($generation);
 
@@ -353,6 +371,8 @@ class ToolApiController extends Controller
             'locale' => 'nullable|string|max:10',
             'tone' => 'nullable|string|max:50',
             'content_type' => ['nullable', 'string', 'max:30', Rule::in(['post', 'page', 'product', 'product_cat', 'tag'])],
+            'wp_entity_type' => ['nullable', 'string', 'max:30', Rule::in(['post', 'page', 'product', 'product_cat', 'tag'])],
+            'wp_entity_id' => 'nullable|integer',
             'lsi_keywords' => 'nullable|array|max:50',
             'lsi_keywords.*' => 'nullable',
             'entities' => 'nullable|array|max:30',
@@ -369,8 +389,14 @@ class ToolApiController extends Controller
         $service = app(ContentGeneratorService::class);
         $locale = $service->resolveLocale($validated['locale'] ?? null, $website, $validated['keyword']);
 
-        $generation = ContentGeneration::create([
-            'user_id' => auth()->id(),
+        $contentKey = $this->resolveContentKey(
+            $validated['wp_entity_type'] ?? null,
+            $validated['wp_entity_id'] ?? null,
+            null,
+            $validated['content_brief_id'] ?? null
+        );
+
+        $data = [
             'api_key_website_id' => $website?->id,
             'target_keyword' => $validated['keyword'],
             'locale' => $locale,
@@ -383,10 +409,15 @@ class ToolApiController extends Controller
             'content_brief_id' => $validated['content_brief_id'] ?? null,
             'target_words' => $validated['target_words'] ?? null,
             'include_external_links' => $validated['include_external_links'] ?? null,
+            'wp_entity_type' => $validated['wp_entity_type'] ?? null,
+            'wp_entity_id' => $validated['wp_entity_id'] ?? null,
+            'content_key' => $contentKey,
             'phase_1_content' => $validated['content'],
             'status' => 'draft',
             'current_phase' => 1,
-        ]);
+        ];
+
+        $generation = $this->resolveOrCreateGeneration($data);
 
         ProcessContentGenerationJob::dispatch($generation);
 
@@ -680,5 +711,71 @@ class ToolApiController extends Controller
     {
         return ['nullable', 'integer', Rule::exists('content_briefs', 'id')
             ->where('user_id', auth()->id())];
+    }
+
+    /**
+     * Bangun identitas stabil (content_key) untuk satu konten logis.
+     * - Auto Optimasi (konten WP yang ada): "wp:{type}:{entity_id}"
+     * - Buat Konten (dari riset): "research:{keyword_research_id}"
+     * - Brief: "brief:{content_brief_id}"
+     */
+    private function resolveContentKey($wpEntityType, $wpEntityId, $keywordResearchId, $contentBriefId): ?string
+    {
+        if ($wpEntityType && $wpEntityId) {
+            return 'wp:' . $wpEntityType . ':' . $wpEntityId;
+        }
+        if ($keywordResearchId) {
+            return 'research:' . $keywordResearchId;
+        }
+        if ($contentBriefId) {
+            return 'brief:' . $contentBriefId;
+        }
+        return null;
+    }
+
+    /**
+     * Reuse generasi yang sudah ada berdasarkan identitas stabil (content_key),
+     * atau buat baru jika belum ada. Satu konten logis = satu baris persisten.
+     * Saat reuse: fase direset & isi terbaru ditimpa (job baru, versi lama diabaikan).
+     */
+    private function resolveOrCreateGeneration(array $data): ContentGeneration
+    {
+        $existing = null;
+        if (!empty($data['content_key'])) {
+            $existing = ContentGeneration::where('user_id', auth()->id())
+                ->where('api_key_website_id', $data['api_key_website_id'] ?? null)
+                ->where('content_key', $data['content_key'])
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        if ($existing) {
+            $fresh = $data;
+            unset($fresh['content_key']);
+            $existing->update(array_merge($fresh, [
+                'status' => 'draft',
+                'current_phase' => array_key_exists('phase_1_content', $fresh) ? 1 : 0,
+                'phase_1_content' => array_key_exists('phase_1_content', $fresh) ? $fresh['phase_1_content'] : null,
+                'phase_2_questions' => null,
+                'phase_3_content' => null,
+                'meta_title' => null,
+                'meta_description' => null,
+                'raw_response' => null,
+                'tokens_in' => 0,
+                'tokens_out' => 0,
+                'tokens_total' => 0,
+            ]));
+            Log::info('ContentGenerator: reuse generasi (content_key)', [
+                'id' => $existing->id,
+                'content_key' => $data['content_key'],
+                'keyword' => $data['target_keyword'] ?? null,
+            ]);
+            return $existing;
+        }
+
+        return ContentGeneration::create(array_merge($data, [
+            'user_id' => auth()->id(),
+            'api_key_website_id' => $data['api_key_website_id'] ?? null,
+        ]));
     }
 }

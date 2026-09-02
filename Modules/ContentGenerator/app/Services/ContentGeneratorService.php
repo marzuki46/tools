@@ -749,6 +749,20 @@ PROMPT;
         return is_string($alt) ? $alt : null;
     }
 
+    private function isQuotaExhausted(int $status, string $body): bool
+    {
+        if ($status === 402 || $status === 429) {
+            return true;
+        }
+        $low = mb_strtolower($body);
+        foreach (['monthly_request_count', 'insufficient_quota', 'quota exceeded', 'quota_exceeded', 'quota limit', 'rate limit', 'too many requests', 'exceeded your current quota', 'usage limit'] as $marker) {
+            if (str_contains($low, $marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private function callAI(string $prompt): string
     {
         $ai = Setting::aiConfig();
@@ -801,9 +815,10 @@ PROMPT;
                 }
 
                 $body = $response->body();
-                // Quota habis (402 MONTHLY_REQUEST_COUNT) — jangan retry cepat, biarkan job di-release 1 jam oleh caller
-                if (str_contains($body, 'MONTHLY_REQUEST_COUNT') || $response->status() === 402) {
-                    $lastError = new Exception('AI quota habis (MONTHLY_REQUEST_COUNT): ' . substr($body, 0, 300));
+                // Quota habis / rate limit (402 || 429 || marker) — jangan retry cepat,
+                // biarkan job di-pause (QUOTA_PAUSE) dan dilanjutkan saat token pulih.
+                if ($this->isQuotaExhausted($response->status(), $body)) {
+                    $lastError = new Exception('QUOTA_PAUSE: quota/limit AI tercapai (HTTP ' . $response->status() . '): ' . substr($body, 0, 300));
                     break;
                 }
                 $lastError = new Exception('AI HTTP ' . $response->status() . ': ' . substr($body, 0, 300));
@@ -811,10 +826,10 @@ PROMPT;
                 $lastError = $e;
             }
 
-            if ($attempt < $maxAttempts && !str_contains($lastError->getMessage(), 'MONTHLY_REQUEST_COUNT')) {
+            if ($attempt < $maxAttempts && !str_contains($lastError->getMessage(), 'QUOTA_PAUSE')) {
                 Log::warning('ContentGenerator: retry callAI', ['attempt' => $attempt, 'error' => $lastError->getMessage()]);
                 sleep(5 * $attempt);
-            } elseif (str_contains($lastError->getMessage(), 'MONTHLY_REQUEST_COUNT')) {
+            } elseif (str_contains($lastError->getMessage(), 'QUOTA_PAUSE')) {
                 break;
             }
         }
@@ -823,8 +838,8 @@ PROMPT;
             Log::error('ContentGenerator AI Failed', [
                 'error' => $lastError?->getMessage(),
             ]);
-            if (str_contains($lastError->getMessage(), 'MONTHLY_REQUEST_COUNT')) {
-                throw new Exception('AI quota habis (MONTHLY_REQUEST_COUNT) — ganti model di Settings/AI atau tunggu reset. ' . substr($lastError->getMessage(), 0, 200));
+            if (str_contains($lastError->getMessage(), 'QUOTA_PAUSE')) {
+                throw new Exception('QUOTA_PAUSE: quota/limit AI tercapai — jeda dulu, akan dilanjutkan saat token pulih. ' . substr($lastError->getMessage(), 0, 200));
             }
             throw new Exception('Gagal memproses konten. Silakan coba lagi.');
         }

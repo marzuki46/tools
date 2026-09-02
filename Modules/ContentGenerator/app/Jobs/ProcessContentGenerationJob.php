@@ -224,16 +224,26 @@ class ProcessContentGenerationJob implements ShouldQueue
             }
 
         } catch (\Exception $e) {
-            if (str_contains($e->getMessage(), 'MONTHLY_REQUEST_COUNT')) {
-                Log::warning('Content Generation quota habis — tunda 1 jam', [
+            if (str_contains($e->getMessage(), 'QUOTA_PAUSE')) {
+                $at = now()->format('Y-m-d H:i:s');
+                Log::warning('Content Generation quota/limit AI habis — jeda & lanjutkan otomatis', [
                     'id' => $this->generation->id,
                     'keyword' => $this->generation->target_keyword,
+                    'paused_at' => $at,
                 ]);
                 $this->generation->update([
                     'status' => 'pending',
-                    'raw_response' => ['error' => 'Quota AI habis — tunda 1 jam / ganti model.'],
+                    'raw_response' => [
+                        'error' => 'Quota/limit AI tercapai. Akan dilanjutkan otomatis saat token pulih.',
+                        'paused_at' => $at,
+                    ],
                 ]);
-                $this->release(3600);
+
+                // Jangan release() (berkonflik dengan retryUntil & menghabiskan attempts).
+                // Dispatch job BARU yang ditunda 1 jam — attempts fresh, bertahan sampai token pulih.
+                self::dispatch($this->generation->refresh(), $this->targetPhase)
+                    ->delay(3600);
+
                 return;
             }
 
