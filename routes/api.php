@@ -49,7 +49,10 @@ Route::prefix('v1')->middleware(['api-key'])->group(function () {
     });
 
     // Centralized tool API - dispatches to the appropriate module
-    Route::middleware('throttle:60,1')->group(function () {
+    // Rate limit dinaikkan jauh (1000/menit) karena alur batch + polling 24/7
+    // (plugin kirim batch lalu poll status terus-menerus; 60/menit terlalu rendah
+    //  dan memicu 429 'Too Many Attempts' saat batch besar).
+    Route::middleware('throttle:1000,1')->group(function () {
         Route::post('/tool/{tool}/{action}', [\App\Http\Controllers\Api\ToolApiController::class, 'execute']);
     });
 
