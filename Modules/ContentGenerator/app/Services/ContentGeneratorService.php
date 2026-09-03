@@ -71,7 +71,7 @@ class ContentGeneratorService
         for ($layer = 1; $layer <= 4; $layer++) {
             $raw = $this->callAI($prompt);
             $candidate = $this->processContent($raw);
-            if (trim((string) $candidate) !== '') {
+            if ($this->hasVisibleText($candidate)) {
                 $content = $candidate;
                 if ($layer > 1) {
                     Log::warning('ContentGenerator: tahap berhasil lewat layer ' . $layer . ' (retry request)', [
@@ -81,13 +81,13 @@ class ContentGeneratorService
                 break;
             }
 
-            Log::warning('ContentGenerator: tahap layer ' . $layer . ' kosong, ulangi request (layer berikutnya)', [
+            Log::warning('ContentGenerator: tahap layer ' . $layer . ' kosong/tanpa isi, ulangi request (layer berikutnya)', [
                 'keyword' => $keyword,
             ]);
         }
 
-        if (trim((string) $content) === '') {
-            throw new Exception('RETRYABLE: AI mengembalikan konten kosong berulang kali — akan dicoba lagi nanti. (keyword: ' . $keyword . ')');
+        if (!$this->hasVisibleText($content)) {
+            throw new Exception('RETRYABLE: AI mengembalikan konten kosong/tanpa isi berulang kali — akan dicoba lagi nanti. (keyword: ' . $keyword . ')');
         }
 
         return $content;
@@ -232,7 +232,7 @@ PROMPT;
         for ($layer = 1; $layer <= 4; $layer++) {
             $raw = $this->callAI($prompt);
             $candidate = $this->processContent($raw);
-            if (trim((string) $candidate) !== '') {
+            if ($this->hasVisibleText($candidate)) {
                 $content = $candidate;
                 if ($layer > 1) {
                     Log::warning('ContentGenerator: fase 3 berhasil lewat layer ' . $layer . ' (retry request)', [
@@ -243,14 +243,16 @@ PROMPT;
                 break;
             }
 
-            Log::warning('ContentGenerator: fase 3 layer ' . $layer . ' kosong, ulangi request (layer berikutnya)', [
+            Log::warning('ContentGenerator: fase 3 layer ' . $layer . ' kosong/tanpa isi, ulangi request (layer berikutnya)', [
                 'keyword' => $keyword,
                 'locale' => $effectiveLocale,
             ]);
         }
 
-        if (trim((string) $content) === '') {
-            return $content;
+        // Hasil tanpa teks terlihat (mis. hanya heading/paragraf kosong) dianggap
+        // kosong — kembalikan string kosong agar job me-RETRYABLE, bukan 'selesai kosong'.
+        if (!$this->hasVisibleText($content)) {
+            return '';
         }
 
         $slop = app(NoAiSlopService::class);
@@ -325,6 +327,13 @@ PROMPT;
             'sup', 'sub',
             'div', 'span',
         ]);
+    }
+
+    // Punya teks yang benar-benar terlihat? (bukan cuma tag kosong/heading tanpa isi).
+    // dipakai agar hasil tidak pernah "selesai tapi kosong"/0 kata.
+    private function hasVisibleText(string $html): bool
+    {
+        return trim(preg_replace('/[\s\p{Z}\p{C}]+/u', ' ', strip_tags($html))) !== '';
     }
 
     private function buildPhase1Prompt(string $keyword, string $locale, string $tone, array $lsiKeywords, array $entities, ?int $userId = null, string $memoryText = '', string $businessText = '', ?int $targetWords = null, string $briefText = '', ?bool $includeExternalLinks = null): string

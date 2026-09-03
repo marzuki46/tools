@@ -132,11 +132,12 @@ class ProcessContentGenerationJob implements ShouldQueue
                     $this->generation->content_type ?? 'post'
                 );
 
-                if (trim((string) $finalContent) === '') {
-                    // Hasil tidak boleh kosong: setelah generatePhase3 (4 layer) masih
-                    // kosong berarti provider sementara gagal diam-diam (200-kosong) —
-                    // jadwal ulang dengan backoff, bukan gagal permanen.
-                    throw new \RuntimeException('RETRYABLE: hasil fase 3 kosong setelah 4 layer — akan dicoba lagi. (id: ' . $this->generation->id . ')');
+                // Hasil TIDAK boleh kosong: generatePhase3 sudah 4 layer + guard
+                // teks terlihat; jika masih kosong/tanpa isi artinya provider gagal
+                // diam-diam -> jadwal ulang dengan backoff, bukan gagal permanen dan
+                // bukan 'selesai tapi 0 kata'.
+                if (trim((string) $finalContent) === '' || !$this->hasVisibleContent($finalContent)) {
+                    throw new \RuntimeException('RETRYABLE: hasil fase 3 kosong/tanpa isi setelah 4 layer — akan dicoba lagi. (id: ' . $this->generation->id . ')');
                 }
 
                 $this->generation->update(['phase_3_content' => $finalContent]);
@@ -388,5 +389,12 @@ class ProcessContentGenerationJob implements ShouldQueue
         } catch (\Throwable $e) {
             Log::warning('Failed to touch worker beat', ['error' => $e->getMessage()]);
         }
+    }
+
+    // Konten HTML yang punya teks terlihat (bukan heading/paragraf kosong),
+    // supaya tidak pernah selesai dengan hasil 0 kata.
+    private function hasVisibleContent(string $html): bool
+    {
+        return trim(preg_replace('/[\s\p{Z}\p{C}]+/u', ' ', strip_tags($html))) !== '';
     }
 }
