@@ -64,6 +64,14 @@ return Application::configure(basePath: dirname(__DIR__))
             ->everyThirtyMinutes()
             ->withoutOverlapping()
             ->onOneServer();
+
+        // Self-healing konten: item 'failed' dicek otomatis dan direqueue.
+        // Tanpa --pending di tugas rutin agar tidak menimbulkan job duplikat;
+        // pemeriksaan pending-stale dijalankan lebih jarang melalui --pending.
+        $schedule->command('content-generator:requeue-stuck')
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->onOneServer();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
