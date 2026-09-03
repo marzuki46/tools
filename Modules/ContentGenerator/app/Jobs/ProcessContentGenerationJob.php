@@ -133,7 +133,10 @@ class ProcessContentGenerationJob implements ShouldQueue
                 );
 
                 if (trim((string) $finalContent) === '') {
-                    throw new \RuntimeException('Phase 3 returned empty content');
+                    // Hasil tidak boleh kosong: setelah generatePhase3 (4 layer) masih
+                    // kosong berarti provider sementara gagal diam-diam (200-kosong) —
+                    // jadwal ulang dengan backoff, bukan gagal permanen.
+                    throw new \RuntimeException('RETRYABLE: hasil fase 3 kosong setelah 4 layer — akan dicoba lagi. (id: ' . $this->generation->id . ')');
                 }
 
                 $this->generation->update(['phase_3_content' => $finalContent]);
