@@ -85,6 +85,7 @@ class ProcessContentGenerationJob implements ShouldQueue
                 );
 
                 $this->generation->update(['phase_1_content' => $content]);
+                $this->touchWorkerBeat();
             }
 
             // Phase 2
@@ -97,6 +98,7 @@ class ProcessContentGenerationJob implements ShouldQueue
                 );
 
                 $this->generation->update(['phase_2_questions' => $questions]);
+                $this->touchWorkerBeat();
             }
 
             // Phase 3
@@ -135,6 +137,7 @@ class ProcessContentGenerationJob implements ShouldQueue
                 }
 
                 $this->generation->update(['phase_3_content' => $finalContent]);
+                $this->touchWorkerBeat();
             }
 
             // Phase 4: Meta Data
@@ -368,5 +371,19 @@ class ProcessContentGenerationJob implements ShouldQueue
     {
         $seconds = min(1800, 120 * (2 ** ($retry - 1)));
         return (int) $seconds;
+    }
+
+    // Tandai worker masih hidup DARI DALAM job yang sedang berjalan. Ini yang
+    // membuat scheduler queue-worker & queue-beat tahu proses tidak mati walau
+    // satu job AI memakan waktu lama. Cegah UI menampilkan "Berhenti/Macet" palsu
+    // selama worker sebenarnya sehat.
+    private function touchWorkerBeat(): void
+    {
+        try {
+            Cache::put('queue_heartbeat', now()->toIso8601String(), 300);
+            \App\Models\Setting::setValue('queue.worker_last_beat', now()->toIso8601String());
+        } catch (\Throwable $e) {
+            Log::warning('Failed to touch worker beat', ['error' => $e->getMessage()]);
+        }
     }
 }
