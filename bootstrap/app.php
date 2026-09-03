@@ -58,7 +58,7 @@ return Application::configure(basePath: dirname(__DIR__))
             } finally {
                 \App\Models\Setting::setValue('queue.worker_last_beat', null);
             }
-        })->everyMinute()->withoutOverlapping(5)->name('queue-worker');
+        })->everyMinute()->name('queue-worker')->withoutOverlapping(5);
 
         $schedule->command('seo-cluster:run')
             ->everyThirtyMinutes()
