@@ -928,10 +928,11 @@ PROMPT;
             if (str_contains($lastError->getMessage(), 'QUOTA_PAUSE')) {
                 throw new Exception('QUOTA_PAUSE: quota AI tercapai — jeda dulu, akan dilanjutkan saat token pulih. ' . substr($lastError->getMessage(), 0, 200));
             }
-            if (str_contains($lastError->getMessage(), 'RETRYABLE')) {
-                throw new Exception('RETRYABLE: AI sedang sibuk/error sementara — akan dicoba lagi. ' . substr($lastError->getMessage(), 0, 200));
-            }
-            throw new Exception('Gagal memproses konten. Silakan coba lagi.');
+            // SEMUA error AI lain diperlakukan sebagai sementara (RETRYABLE), bukan
+            // permanen. Tujuannya: satu error provider (429/5xx/400 transient/koneksi/
+            // body tak dikenali) TIDAK boleh menggagalkan massal satu batch. Job akan
+            // menandai pending & mencoba lagi nanti sampai berhasil atau batas tinggi.
+            throw new Exception('RETRYABLE: AI gagal / sedang sibuk — akan dicoba lagi. ' . substr($lastError->getMessage(), 0, 200));
         }
 
         $data = $response->json();

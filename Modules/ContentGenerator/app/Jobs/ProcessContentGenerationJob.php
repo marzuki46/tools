@@ -21,7 +21,12 @@ class ProcessContentGenerationJob implements ShouldQueue
 
     public int $tries = 999;
 
-    public int $maxRetryableReleases = 40;
+    // Batas tinggi ulang-coba utk error sementara AI. Karena retry dilakukan
+    // dengan dispatch job baru (attempts fresh), batas ini ~ jumlah hari item
+    // boleh bertahan menunggu sebelum akhirnya ditandai failed. Prinsip: batch
+    // tidak boleh "failed semua" karena error provider sesaat; item menunggu &
+    // lanjut otomatis sampai berhasil (atau batas tinggi tercapai).
+    public int $maxRetryCount = 500;
 
     public int $timeout = 1800;
 
@@ -218,6 +223,11 @@ class ProcessContentGenerationJob implements ShouldQueue
 
             Cache::put('queue_heartbeat', now()->toIso8601String(), 300);
 
+            // Reset penghitung retry setelah sukses, agar item berikutnya mulai bersih.
+            if ((int) $this->generation->retry_count !== 0) {
+                $this->generation->update(['retry_count' => 0]);
+            }
+
             try {
                 app(MemoryService::class)->storeFromGeneration($this->generation);
             } catch (\Exception $e) {
@@ -251,23 +261,27 @@ class ProcessContentGenerationJob implements ShouldQueue
                 return;
             }
 
-            // Error sementara AI (429/5xx/koneksi) — jangan gagal permanen.
-            // Set pending & release 150 detik untuk dicoba lagi; setelah batas
-            // release tercapai baru ditandai failed.
+            // Error sementara AI (429/5xx/koneksi/transient) — jangan gagal permanen.
+            // Set pending & dispatch job baru yang ditunda, sampai berhasil atau
+            // melewati batas tinggi retry. Bukan gagal massal seperti sebelumnya.
             if (str_contains($e->getMessage(), 'RETRYABLE')) {
-                $attempt = (int) $this->attempts();
-                Log::warning('Content Generation AI sementara — release & retry', [
+                $retries = (int) ($this->generation->retry_count ?? 0);
+                $retries++;
+                $next = $this->retryDelaySeconds($retries);
+
+                Log::warning('Content Generation AI sementara — jadwalkan ulang', [
                     'id' => $this->generation->id,
                     'keyword' => $this->generation->target_keyword,
                     'phase' => $this->targetPhase,
-                    'attempt' => $attempt,
+                    'retry' => $retries,
+                    'next_in_seconds' => $next,
                     'error' => $e->getMessage(),
                 ]);
 
-                if ($attempt >= $this->maxRetryableReleases) {
+                if ($retries > $this->maxRetryCount) {
                     $this->generation->update([
                         'status' => 'failed',
-                        'raw_response' => ['error' => 'AI sibuk/error sementara terlalu lama: ' . $e->getMessage()],
+                        'raw_response' => ['error' => 'AI sibuk/error sementara terlalu lama setelah ' . $retries . ' percobaan. ' . $e->getMessage()],
                     ]);
                     $this->syncTokenUsage();
                     $this->fail($e);
@@ -275,10 +289,19 @@ class ProcessContentGenerationJob implements ShouldQueue
                 }
 
                 $this->generation->update([
+                    'retry_count' => $retries,
                     'status' => 'pending',
-                    'raw_response' => ['error' => 'AI sementara sibuk — dicoba lagi otomatis.', 'retry_at' => now()->addMinutes(2)->toDateTimeString()],
+                    'raw_response' => [
+                        'error' => 'AI sementara sibuk — akan dicoba lagi otomatis.',
+                        'next_retry_at' => now()->addSeconds($next)->toDateTimeString(),
+                    ],
                 ]);
-                $this->release(150);
+
+                // Bukan release() (berkonflik dengan retryUntil & menghabiskan attempts),
+                // dispatch job BARU yang ditunda — attempts fresh, bertahan lama.
+                self::dispatch($this->generation->refresh(), $this->targetPhase)
+                    ->delay($next);
+
                 return;
             }
 
@@ -336,5 +359,14 @@ class ProcessContentGenerationJob implements ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    // Backoff eksponensial utk retry: 2m, 4m, 8m, ... cap 30 menit.
+    // Ulang-coba jarang-jarang awal, lalu makin lebar kalau provider masih sibuk —
+    // tanpa menyerbu provider dan tanpa "failed semua".
+    private function retryDelaySeconds(int $retry): int
+    {
+        $seconds = min(1800, 120 * (2 ** ($retry - 1)));
+        return (int) $seconds;
     }
 }

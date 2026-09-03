@@ -36,6 +36,7 @@ class ContentGeneration extends Model
         'wp_post_id',
         'status',
         'current_phase',
+        'retry_count',
         'raw_response',
         'tokens_in',
         'tokens_out',
